@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { searchArchive, creatorStats } from "@/lib/archive";
-import { rankArtists } from "@/lib/popularity";
+import { rankArtists, canonScore } from "@/lib/popularity";
 import { batchSitelinks, pageviews } from "@/lib/notability";
 import { topListenedArtists } from "@/lib/feedback";
 import { normalizeSearchItem, byPopularity } from "@/lib/pipeline";
@@ -43,9 +43,9 @@ export default function HomePage() {
           [shelf.id]: docs.map(normalizeSearchItem).filter((a) => a.quality >= 3).sort(byPopularity).slice(0, 10),
         }));
       }
-      // Popular = who PharOS users actually listen to (shared OrbitDB chart).
-      // Wikipedia measures only FILL remaining slots until the community
-      // chart is large enough — real listening always comes first.
+      // Popular = who PharOS users actually listen to (shared OrbitDB chart)
+      // weighted by the user's CULTURAL canon (lib/culture.js): the order
+      // follows the user's culture and listening affinity, not a global one.
       const listened = await topListenedArtists(24);
       let popular = listened.map((a) => ({ name: a.name, listens: a.plays }));
       if (popular.length < 12) {
@@ -61,6 +61,10 @@ export default function HomePage() {
           popular.push(a);
         }
       }
+      // Cultural affinity re-rank: cultural-canon tier (the user's own canon)
+      // dominates, real community listens second, encyclopedic measures last.
+      popular = [...popular].sort((a, b) =>
+        (canonScore(b.name) * 50 + (b.listens ?? 0)) - (canonScore(a.name) * 50 + (a.listens ?? 0)));
       if (alive) setArtists(popular.slice(0, 12));
     })();
     return () => { alive = false; };

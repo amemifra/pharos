@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SHELVES } from "@/lib/catalog";
 import { startWarmup } from "@/lib/catalogwarm";
+import { applyCulturalCanon } from "@/lib/culture";
 import Icon from "@/components/Icon";
 import PharosMark from "@/components/PharosMark";
 
@@ -29,6 +30,10 @@ export default function AppShell({ children }) {
   const [warm, setWarm] = useState({ artist: null, done: 0, total: 0 });
   useEffect(() => {
     let cancelled = false;
+    // CULTURAL CANON first: the warm-up (canonNames) and every ranking read
+    // the active canon table — the user's own culture must be merged before
+    // any proposal is computed (cultural canon, not a global one).
+    applyCulturalCanon();
     const kick = () => {
       if (cancelled) return;
       startWarmup({
