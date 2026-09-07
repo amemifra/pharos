@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { loadFeed, relativeDate } from "@/lib/podcast";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
@@ -16,6 +16,7 @@ import Icon from "@/components/Icon";
  */
 function PodcastPageInner() {
   const params = useSearchParams();
+  const router = useRouter();
   const feedUrl = params.get("url") ? decodeURIComponent(params.get("url")) : "";
   const { playQueue } = usePlayer();
   const [data, setData] = useState(null);
@@ -59,16 +60,19 @@ function PodcastPageInner() {
   }, [data, played]);
 
   if (!feedUrl) {
+    // Navigation via router (next/navigation): basePath-aware. Plain
+    // window.location/anchor hrefs drop the /pharos base → GitHub Pages 404.
+    const open = (u) => router.push(`/podcast?url=${encodeURIComponent(u)}`);
     return (
       <main className="mx-auto max-w-6xl px-4 py-10">
         <h1 className="text-2xl font-bold tracking-tight">Podcasts</h1>
         <p className="mt-2 text-sm text-zinc-500">
           Add a show by its RSS feed URL. Discovery via Podcast Index is optional (pf.pixkey).
         </p>
-        <SubsList subs={subs} onChange={setSubs} />
-        <AddFeedForm onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
-        <CommunitySection onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
-        <ChartsSection onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
+        <SubsList subs={subs} onOpen={open} onChange={setSubs} />
+        <AddFeedForm onOpen={open} />
+        <CommunitySection onOpen={open} />
+        <ChartsSection onOpen={open} />
       </main>
     );
   }
@@ -164,7 +168,7 @@ async function markPlayedAndPlay(ep, prev, playQueue, track) {
   playQueue(track, 0);
 }
 
-function SubsList({ subs, onChange }) {
+function SubsList({ subs, onOpen, onChange }) {
   if (!subs.length) return null;
   return (
     <section className="mt-8">
@@ -172,9 +176,9 @@ function SubsList({ subs, onChange }) {
       <ul className="divide-y divide-zinc-800/60 rounded-xl bg-zinc-900/50">
         {subs.map((s) => (
           <li key={s.feedUrl} className="flex items-center gap-3 px-4 py-2.5">
-            <a className="flex-1 truncate text-sm hover:text-emerald-400" href={`/podcast?url=${encodeURIComponent(s.feedUrl)}`}>
+            <button className="flex-1 truncate text-left text-sm hover:text-emerald-400" onClick={() => onOpen(s.feedUrl)}>
               {s.title}
-            </a>
+            </button>
             <button
               onClick={() => { unsubscribe(s.feedUrl); onChange(listSubs()); }}
               className="text-xs text-zinc-500 hover:text-red-400"
@@ -229,7 +233,7 @@ function CommunitySection({ onOpen }) {
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={s.image} alt="" loading="lazy" className="h-8 w-8 rounded object-cover" />
             )}
-            <a className="flex-1 truncate text-sm hover:text-emerald-400" href={`/podcast?url=${encodeURIComponent(s.feedUrl)}`}>
+            <a className="flex-1 truncate text-sm hover:text-emerald-400" href={`/podcast?url=${encodeURIComponent(s.feedUrl)}`} onClick={(e) => { e.preventDefault(); onOpen(s.feedUrl); }}>
               {s.title}
             </a>
           </li>
@@ -242,8 +246,10 @@ function CommunitySection({ onOpen }) {
 /**
  * ChartsSection — the most-used podcasts per nation, automatically (F6
  * discovery, zero keys): Apple public charts, tier-A markets 1000 shows,
- * others 100. Click → feed URL resolved via public /lookup → show page.
- * Default nation from the browser locale, honest empty state on failure.
+ * others 100. Nation preselected from the IP's country (api.country.is,
+ * keyless, CORS-open — the user asked for WHERE the connection answers, not
+ * the browser language), cached in pf.country; flags live in a dropdown.
+ * Click → feed URL resolved via public /lookup → show page.
  */
 function ChartsSection({ onOpen }) {
   const [nation, setNation] = useState(null);
@@ -251,12 +257,35 @@ function ChartsSection({ onOpen }) {
   const [opening, setOpening] = useState(null);
 
   useEffect(() => {
-    let region = "us";
-    try {
-      const loc = navigator.language?.split("-")[1];
-      if (loc && TOP_NATIONS.some((n) => n.code === loc.toLowerCase())) region = loc.toLowerCase();
-    } catch {}
-    setNation(region);
+    let alive = true;
+    // Nation from the connection's IP (country.is, keyless), cached; browser
+    // locale as fallback. Only the explicit pf.country override beats it.
+    setNation(null);
+    (async () => {
+      let code = null;
+      try { code = localStorage.getItem("pf.country"); } catch {}
+      if (!code || !TOP_NATIONS.some((n) => n.code === code)) {
+        try {
+          const r = await fetch("https://api.country.is/");
+          if (r.ok) {
+            const j = await r.json();
+            const c = String(j?.country ?? "").toLowerCase();
+            if (c && TOP_NATIONS.some((n) => n.code === c)) {
+              code = c;
+              try { localStorage.setItem("pf.country", c); } catch {}
+            }
+          }
+        } catch {}
+      }
+      if (!code) {
+        try {
+          const loc = navigator.language?.split("-")[1];
+          if (loc && TOP_NATIONS.some((n) => n.code === loc.toLowerCase())) code = loc.toLowerCase();
+        } catch {}
+      }
+      if (alive) setNation(code ?? "us");
+    })();
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
@@ -283,19 +312,21 @@ function ChartsSection({ onOpen }) {
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
         Most played · by nation (Apple public charts, top {depth})
       </h2>
-      <div className="mb-5 flex flex-wrap gap-1.5">
-        {TOP_NATIONS.map((n) => (
-          <button
-            key={n.code}
-            onClick={() => setNation(n.code)}
-            title={n.name}
-            className={`rounded-full px-2.5 py-1 text-base leading-none transition-colors ${
-              nation === n.code ? "bg-emerald-600/25 ring-1 ring-emerald-500" : "hover:bg-zinc-800"
-            }`}
-          >
-            {n.flag}
-          </button>
-        ))}
+      <div className="mb-5">
+        <select
+          value={nation ?? ""}
+          onChange={(e) => {
+            setNation(e.target.value);
+            try { localStorage.setItem("pf.country", e.target.value); } catch {}
+          }}
+          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          aria-label="Chart nation"
+        >
+          {!nation && <option value="">Detecting nation…</option>}
+          {TOP_NATIONS.map((n) => (
+            <option key={n.code} value={n.code}>{n.flag} {n.name}</option>
+          ))}
+        </select>
       </div>
       {shows === null && <p className="py-8 text-sm text-zinc-500">Loading chart…</p>}
       {shows?.length === 0 && (
