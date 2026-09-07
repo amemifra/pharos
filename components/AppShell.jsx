@@ -53,6 +53,8 @@ export default function AppShell({ children }) {
         if (!cancelled) await fb.publishRankerConsensus();
         // F3: share the per-version aggregates (same P2P consensus layer).
         if (!cancelled) await fb.publishVersionConsensus();
+        // Community listening chart: flush any unpublished local artist plays.
+        if (!cancelled) await fb.publishArtistListens();
       } catch {}
     })();
     return () => { cancelled = true; };

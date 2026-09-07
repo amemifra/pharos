@@ -195,6 +195,14 @@ export function PlayerProvider({ children }) {
     // F3: record the START of a version play (completion is registered on
     // pf.state once ≥60%/30s is listened).
     import("@/lib/feedback").then((fb) => fb.recordVersionPlay(q[i].id, q[i].url, { completed: false }))
+      .then(() => {
+        // Community listening chart: aggregate per-artist plays (P2P, counts only).
+        return import("@/lib/feedback").then(async (fb) => {
+          const artist = q[i].artist ?? q[i].__albumArtist ?? "";
+          if (artist) fb.recordArtistListen(artist, { completed: false });
+          await fb.publishArtistListens();
+        });
+      })
       .then(() => import("@/lib/feedback").then((fb2) => fb2.publishVersionConsensus()))
       .catch(() => {});
     if (mode === "island") {

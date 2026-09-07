@@ -5,6 +5,7 @@ import Link from "next/link";
 import { searchArchive, creatorStats } from "@/lib/archive";
 import { rankArtists } from "@/lib/popularity";
 import { batchSitelinks, pageviews } from "@/lib/notability";
+import { topListenedArtists } from "@/lib/feedback";
 import { normalizeSearchItem, byPopularity } from "@/lib/pipeline";
 import { SHELVES } from "@/lib/catalog";
 
@@ -41,14 +42,25 @@ export default function HomePage() {
           [shelf.id]: docs.map(normalizeSearchItem).filter((a) => a.quality >= 3).sort(byPopularity).slice(0, 10),
         }));
       }
-      // Ranking with objective measures: Wikipedia sitelinks (batched, one call)
-      // + 12-month pageviews only for candidates with real notability.
-      const stats = await creatorStats("audio_music", 500);
-      const sitelinks = await batchSitelinks(stats.map((s) => s.name));
-      const enriched = stats.map((s) => ({ ...s, sitelinks: sitelinks.get(s.name) ?? 0 }));
-      const notable = [...enriched].sort((a, b) => b.sitelinks - a.sitelinks).slice(0, 16);
-      await Promise.all(notable.map(async (s) => { s.pageviews = await pageviews(s.name); }));
-      if (alive) setArtists(rankArtists(enriched).slice(0, 12));
+      // Popular = who PharOS users actually listen to (shared OrbitDB chart).
+      // Wikipedia measures only FILL remaining slots until the community
+      // chart is large enough — real listening always comes first.
+      const listened = await topListenedArtists(24);
+      let popular = listened.map((a) => ({ name: a.name, listens: a.plays }));
+      if (popular.length < 12) {
+        const seen = new Set(popular.map((a) => a.name.toLowerCase()));
+        const stats = await creatorStats("audio_music", 500);
+        const sitelinks = await batchSitelinks(stats.map((s) => s.name));
+        const enriched = stats.map((s) => ({ ...s, sitelinks: sitelinks.get(s.name) ?? 0 }));
+        const notable = [...enriched].sort((a, b) => b.sitelinks - a.sitelinks).slice(0, 16);
+        await Promise.all(notable.map(async (s) => { s.pageviews = await pageviews(s.name); }));
+        for (const a of rankArtists(notable)) {
+          if (popular.length >= 12) break;
+          if (seen.has(a.name.toLowerCase())) continue;
+          popular.push(a);
+        }
+      }
+      if (alive) setArtists(popular.slice(0, 12));
     })();
     return () => { alive = false; };
   }, []);
