@@ -11,6 +11,7 @@ const NAV = [
   { href: "/", icon: "home", label: "Home" },
   { href: "/search", icon: "search", label: "Search" },
   { href: "/library", icon: "library", label: "Library" },
+  { href: "/podcast", icon: "podcast", label: "Podcast" },
 ];
 
 /**
@@ -95,13 +96,13 @@ export default function AppShell({ children }) {
           <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-widest text-zinc-600">Genres</p>
           <nav className="space-y-0.5">
             {SHELVES.slice(0, 6).map((s) => (
-              <a
+              <Link
                 key={s.id}
                 href={`/#shelf-${s.id}`}
                 className="block rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-emerald-400 transition-colors"
               >
                 {s.label}
-              </a>
+              </Link>
             ))}
           </nav>
         </div>

@@ -152,6 +152,31 @@ check("claim namespace TTL is lease TTL", ttlForKey("queue:claim:x"), CLAIM_TTL_
   check("candidates: crawl is last", src[src.length - 1] === "crawl" ? 1 : 0, 1, (v, t) => v === t);
 }
 
+// — 9) CANONICAL MATCHER GUARDS (matchCanonicalEntries, pure): an archive.org
+// item whose title is just the artist name is a collection, not an album;
+// one item stands for at most one canonical release; "<Work> (Deluxe|...)" IS
+// the work (edition containment, year window waived for reissue dates).
+{
+  const { matchCanonicalEntries } = await import("../lib/discography.js");
+  const items = [
+    { id: "generic", title: "20150205 The-Beatles", year: 2015 },
+    { id: "revolver-deluxe", title: "Revolver (Deluxe)", year: 2022 },
+    { id: "abbey", title: "Abbey Road", year: 1969 },
+  ];
+  const rgs = [
+    { title: "Revolver", year: 1966, mbid: "rg1" },
+    { title: "Abbey Road", year: 1969, mbid: "rg2" },
+    { title: "The Beatles", year: 1968, mbid: "rg3" },
+    { title: "The Beatles", year: 1968, mbid: "rg3-dup" },
+  ];
+  const m = matchCanonicalEntries("The Beatles", rgs, items);
+  const by = Object.fromEntries(m.entries.map((e) => [e.mbid, e]));
+  check("matcher: edition containment (Revolver → Deluxe item)", by.rg1.status === "available" && by.rg1.match.id === "revolver-deluxe" ? 1 : 0, 1, (v, t) => v === t);
+  check("matcher: identity guard (artist-named collection never matches)", m.entries.every((e) => e.match?.id !== "generic") ? 1 : 0, 1, (v, t) => v === t);
+  check("matcher: one item one album (same-title RGs ≤1 available)", m.entries.filter((e) => e.title === "The Beatles" && e.status === "available").length, 1, (v, t) => v <= t);
+  check("matcher: exact title match", by.rg2.status === "available" && by.rg2.match.id === "abbey" ? 1 : 0, 1, (v, t) => v === t);
+}
+
 console.log("\n═══ DQ: fill on real artists (PD-first collection) ═══");
 
 // PD-first sample: artists from georgeblood (public domain by construction).

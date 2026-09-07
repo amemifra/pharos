@@ -13,6 +13,7 @@ export default function Icon({ name, className = "h-5 w-5" }) {
     prev: <><path d="M19 4.5v15l-10-7.5z" fill="currentColor" stroke="none" /><rect x="5" y="4" width="3" height="16" rx="1" fill="currentColor" stroke="none" /></>,
     note: <><path d="M9 18V5l10-2v13" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /></>,
     close: <><path d="m5 5 14 14" /><path d="m19 5-14 14" /></>,
+    podcast: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0" /><path d="M12 18v3" /></>,
   };
   return (
     <svg
