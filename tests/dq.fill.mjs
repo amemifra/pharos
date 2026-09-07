@@ -15,6 +15,8 @@
  *      work (foldAlternateTakes): numbered tracks never repeat a base title,
  *      and folded alternates survive as playable version groups (own trackKey,
  *      provenance traced to real item files).
+ *   8. TOP-DOWN CANDIDATE ORDER — the warm-up queue starts from user intent
+ *      and the canonical catalog; the archive.org crawl is last.
  *
  * Usage: node tests/dq.fill.mjs
  */
@@ -124,6 +126,31 @@ check("claim namespace TTL is lease TTL", ttlForKey("queue:claim:x"), CLAIM_TTL_
   }
 }
 
+
+// — 8) TOP-DOWN candidate order: the queue starts from user intent and the
+// canonical catalog; measured popularity comes after, curated PD after that,
+// and the archive.org crawl is LAST (user-ratified direction inversion).
+{
+  const { buildCandidates } = await import("../lib/catalogwarm.js");
+  const order = buildCandidates({
+    recent: ["Betty Thornton"],
+    canonNames: ["wolfgang amadeus mozart", "johann sebastian bach", "mozart", "antonio vivaldi"],
+    measured: [
+      { name: "Ella Fitzgerald", sitelinks: 100, pageviews: 5_000_000 },
+      { name: "The Chordettes", sitelinks: 5, pageviews: 10_000 },
+    ],
+    pd: ["Enrico Caruso"],
+    crawl: ["Long Tail Ensemble"],
+  });
+  const src = order.map((c) => c.source);
+  check("candidates: user-visited artist first", order[0].name === "Betty Thornton" ? 1 : 0, 1, (v, t) => v === t);
+  check("candidates: canon before measured popularity", src.indexOf("canon") !== -1 && src.indexOf("canon") < src.indexOf("popular") ? 1 : 0, 1, (v, t) => v === t);
+  check("candidates: canon alias collapse (mozart ×1)", order.filter((c) => /mozart/i.test(c.name)).length, 1, (v, t) => v <= t);
+  check("candidates: canon tier order (Bach before Vivaldi)", order.findIndex((c) => /bach/i.test(c.name)) < order.findIndex((c) => c.name === "antonio vivaldi") ? 1 : 0, 1, (v, t) => v === t);
+  check("candidates: measured popularity ordering (Ella > Chordettes)", order.findIndex((c) => c.name === "Ella Fitzgerald") < order.findIndex((c) => c.name === "The Chordettes") ? 1 : 0, 1, (v, t) => v === t);
+  check("candidates: PD queue before crawl", src.indexOf("pd") < src.indexOf("crawl") ? 1 : 0, 1, (v, t) => v === t);
+  check("candidates: crawl is last", src[src.length - 1] === "crawl" ? 1 : 0, 1, (v, t) => v === t);
+}
 
 console.log("\n═══ DQ: fill on real artists (PD-first collection) ═══");
 
