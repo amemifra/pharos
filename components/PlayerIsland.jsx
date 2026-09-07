@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { assetPath } from "@/lib/basepath";
 
 /**
  * PlayerIsland — iframe host for the player island (/player route).
@@ -37,7 +38,7 @@ export default function PlayerIsland({ onMessage, islandRef }) {
   return (
     <iframe
       ref={islandRef}
-      src="/player"
+      src={assetPath("/player/")}
       title="Pharos player island"
       sandbox="allow-scripts allow-same-origin"
       className="hidden h-0 w-0 border-0"
