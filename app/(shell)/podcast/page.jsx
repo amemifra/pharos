@@ -78,13 +78,36 @@ function PodcastPageInner() {
   }
 
   const subbed = isSubscribed(feedUrl);
+  const loading = !data && !error;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       {error && (
-        <p className="mb-4 rounded-lg border border-red-800/50 bg-red-500/10 px-4 py-2 text-sm text-red-300">
-          Feed could not be loaded ({error}). The CORS fallback was tried; some feeds block both paths.
-        </p>
+        <div className="mb-4 rounded-lg border border-red-800/50 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+          Feed could not be loaded ({error}). The CORS fallback chain was tried.
+          <button onClick={() => load(true)} className="ml-3 rounded-full border border-red-700/60 px-3 py-0.5 text-xs font-semibold hover:bg-red-500/20">
+            Retry
+          </button>
+        </div>
+      )}
+      {loading && (
+        <div aria-busy="true">
+          <div className="flex items-start gap-5">
+            <div className="h-28 w-28 shrink-0 animate-pulse rounded-xl bg-zinc-900" />
+            <div className="min-w-0 flex-1 space-y-3 pt-2">
+              <div className="h-3 w-20 animate-pulse rounded bg-zinc-900" />
+              <div className="h-7 w-3/4 animate-pulse rounded bg-zinc-900" />
+              <div className="h-4 w-full animate-pulse rounded bg-zinc-900" />
+              <div className="h-8 w-40 animate-pulse rounded-full bg-zinc-900" />
+            </div>
+          </div>
+          <p className="mt-10 text-sm text-zinc-500">Loading episodes… (feeds without CORS go through a public proxy — this can take a few seconds)</p>
+          <div className="mt-4 space-y-2">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="h-14 animate-pulse rounded-lg bg-zinc-900/70" />
+            ))}
+          </div>
+        </div>
       )}
       {data && (
         <header className="flex items-start gap-5">
@@ -129,7 +152,10 @@ function PodcastPageInner() {
       )}
 
       {data && (
-        <ol className="mt-8 divide-y divide-zinc-800/60 rounded-xl bg-zinc-900/50">
+        <ol className="mt-8 divide-y divide-zinc-800/60 rounded-xl bg-zinc-900/50" aria-label="Episodes">
+          {data.episodes.length === 0 && (
+            <li className="px-4 py-6 text-sm text-zinc-500">This feed has no episodes.</li>
+          )}
           {data.episodes.map((ep) => {
             const p = played[ep.guid];
             const isPlayed = !!p?.progressSec;
