@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadFeed, relativeDate } from "@/lib/podcast";
-import { TOP_NATIONS, topPodcasts, resolveFeedUrl } from "@/lib/podcastcharts";
+import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
@@ -254,7 +254,11 @@ function CommunitySection({ onOpen }) {
 function ChartsSection({ onOpen }) {
   const [nation, setNation] = useState(null);
   const [shows, setShows] = useState(null);
+  const [stats, setStats] = useState({});
   const [opening, setOpening] = useState(null);
+  const [sort, setSort] = useState("chart"); // chart | listens | genre | title
+  const [genre, setGenre] = useState("");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -292,7 +296,7 @@ function ChartsSection({ onOpen }) {
     if (!nation) return;
     let alive = true;
     setShows(null);
-    topPodcasts(nation).then((s) => alive && setShows(s));
+    topPodcasts(nation).then((s) => { if (alive) { setShows(s); listenStats(nation).then((st) => alive && setStats(st)); } });
     return () => { alive = false; };
   }, [nation]);
 
@@ -306,13 +310,39 @@ function ChartsSection({ onOpen }) {
     }
   };
 
-  const depth = ["us", "cn", "in", "gb", "de", "jp"].includes(nation) ? 1000 : 100;
+  const genres = useMemo(() => {
+    const set = new Set();
+    for (const s of shows ?? []) if (s.genre) set.add(s.genre);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [shows]);
+
+  const view = useMemo(() => {
+    let list = shows ?? [];
+    if (genre) list = list.filter((s) => s.genre === genre);
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((s) => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q));
+    }
+    const withRank = list.map((s, i) => ({ ...s, avgRank: stats[s.id]?.avgRank ?? null }));
+    switch (sort) {
+      case "listens": // average daily position from the public-chart feed
+        return [...withRank].sort((a, b) =>
+          (a.avgRank ?? 9999) - (b.avgRank ?? 9999) || (a.avgRank == null ? 1 : 0) - (b.avgRank == null ? 1 : 0));
+      case "genre":
+        return [...withRank].sort((a, b) => (a.genre ?? "zz").localeCompare(b.genre ?? "zz") || a.title.localeCompare(b.title));
+      case "title":
+        return [...withRank].sort((a, b) => a.title.localeCompare(b.title));
+      default:
+        return withRank; // today's public chart order
+    }
+  }, [shows, stats, sort, genre, query]);
+
   return (
     <section className="mt-10">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
-        Most played · by nation (Apple public charts, top {depth})
+        Most played · by nation (Apple public charts, full chart · {view.length} shows)
       </h2>
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         <select
           value={nation ?? ""}
           onChange={(e) => {
@@ -327,6 +357,26 @@ function ChartsSection({ onOpen }) {
             <option key={n.code} value={n.code}>{n.flag} {n.name}</option>
           ))}
         </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort"
+          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600">
+          <option value="chart">Sort: chart position</option>
+          <option value="listens">Sort: avg listens (daily feed)</option>
+          <option value="genre">Sort: genre</option>
+          <option value="title">Sort: title</option>
+        </select>
+        {genres.length > 0 && (
+          <select value={genre} onChange={(e) => setGenre(e.target.value)} aria-label="Genre filter"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600">
+            <option value="">Genre: all</option>
+            {genres.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        )}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter…"
+          className="w-40 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+        />
       </div>
       {shows === null && <p className="py-8 text-sm text-zinc-500">Loading chart…</p>}
       {shows?.length === 0 && (
@@ -334,11 +384,12 @@ function ChartsSection({ onOpen }) {
       )}
       {shows?.length > 0 && (
         <ol className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-          {shows.map((s, i) => (
+          {view.map((s, i) => (
             <li key={s.id}>
               <button
                 onClick={() => open(s)}
                 disabled={opening === s.id}
+                title={s.genre ?? ""}
                 className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-900 disabled:opacity-50"
               >
                 <span className="w-7 shrink-0 text-right text-xs tabular-nums text-zinc-600">{i + 1}</span>
