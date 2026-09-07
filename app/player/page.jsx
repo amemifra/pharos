@@ -38,12 +38,19 @@ export default function PlayerIslandPage() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    /** Restore the island-owned queue (opaque-origin safe: try/catch). */
+    /** Restore the island-owned queue (opaque-origin safe: try/catch).
+     *  The snapshot carries position + playing: after a full reload the
+     *  track resumes WHERE it was, and only auto-resumes if it was playing
+     *  (best effort — autoplay policies may keep it paused at position). */
+    let restorePosition = 0;
+    let resumePlaying = false;
     try {
       const saved = JSON.parse(localStorage.getItem("pf.player.queue") ?? "null");
       if (saved && Array.isArray(saved.tracks) && saved.tracks.length) {
         queueRef.current = saved.tracks;
         indexRef.current = Math.max(0, Math.min(saved.index ?? 0, saved.tracks.length - 1));
+        restorePosition = Number(saved.position) || 0;
+        resumePlaying = !!saved.playing;
         audio.src = saved.tracks[indexRef.current].url;
       }
     } catch {}
@@ -126,9 +133,25 @@ export default function PlayerIslandPage() {
 
     const persist = () => {
       try {
-        localStorage.setItem("pf.player.queue", JSON.stringify({ tracks: queueRef.current, index: indexRef.current }));
+        localStorage.setItem("pf.player.queue", JSON.stringify({
+          tracks: queueRef.current,
+          index: indexRef.current,
+          position: audio?.currentTime ?? 0,
+          playing: audio ? !audio.paused : false,
+        }));
       } catch {}
     };
+
+    /** Throttled snapshot while playing (3s) + on tab close: the reload
+     *  resumes from the last saved position, not from zero. */
+    let lastPersist = 0;
+    const persistThrottled = () => {
+      const now = Date.now();
+      if (now - lastPersist < 3000) return;
+      lastPersist = now;
+      persist();
+    };
+    const onPageHide = () => persist();
 
     /** shell → island message handler. */
     const onMessage = (e) => {
@@ -166,8 +189,19 @@ export default function PlayerIslandPage() {
       }
     };
 
-    const onTimeUpdate = () => sendState(false);
-    const onLoadedMetadata = () => sendState(true);
+    const onTimeUpdate = () => { sendState(false); persistThrottled(); };
+    const onLoadedMetadata = () => {
+      // Resume from the persisted position exactly once, per track load.
+      if (restorePosition > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+        audio.currentTime = Math.min(restorePosition, Math.max(0, audio.duration - 1));
+        restorePosition = 0;
+      }
+      if (resumePlaying) {
+        resumePlaying = false;
+        audio.play().catch(() => { /* autoplay blocked: paused at position */ });
+      }
+      sendState(true);
+    };
     const onPlay = () => sendState(true);
     const onPause = () => sendState(true);
     const onEnded = () => {
@@ -198,6 +232,7 @@ export default function PlayerIslandPage() {
     };
 
     window.addEventListener("message", onMessage);
+    window.addEventListener("pagehide", onPageHide);
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("play", onPlay);
@@ -215,6 +250,7 @@ export default function PlayerIslandPage() {
 
     return () => {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pharos:restoration", onRestorationChange);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
