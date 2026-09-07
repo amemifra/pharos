@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { assetPath } from "@/lib/basepath";
 
 /**
  * PLAYER ISLAND (phase 1 of docs/ux-architecture.md).
@@ -86,37 +87,63 @@ export default function PlayerIslandPage() {
      * AI mode requires a wired model (lib/restore-model.js) and reports
      * honest unavailability otherwise. Never blocks the main thread beyond
      * graph construction (the worklet runs on the audio render thread).
+     *
+     * P0#3: createMediaElementSource reroutes the element PERMANENTLY to its
+     * context — it can never be undone, only bypassed. The old code closed
+     * the context on "off" (element still routed to a CLOSED context =
+     * permanent silence) and re-created the source on "light" (InvalidState-
+     * Error). So: ONE context + ONE source node, built lazily; toggling
+     * rewires the chain, "off" bypasses the graph (src → destination) and
+     * suspends. The worklet module is loaded BEFORE the element is routed so
+     * a load failure leaves playback on the default destination.
      */
     let restorationCtx = null;
+    let restorationSrc = null;
+    let lightChain = null;
+    const bypassRestoration = () => {
+      if (!restorationCtx || !restorationSrc) return;
+      if (lightChain) { try { lightChain.hp.disconnect(); lightChain.worklet.disconnect(); } catch {} lightChain = null; }
+      try { restorationSrc.disconnect(); restorationSrc.connect(restorationCtx.destination); } catch {}
+      restorationCtx.suspend().catch(() => {});
+    };
     const applyRestoration = async (mode) => {
       try {
-        // Tear down any previous graph.
-        if (restorationCtx) { await restorationCtx.close().catch(() => {}); restorationCtx = null; }
-        if (mode === "off") {
-          window.__pharosRestoration = { mode: "off", active: false };
-          return;
-        }
         if (mode === "ai") {
           const model = await import("@/lib/restore-model.js").then((m) => m.checkModel());
           if (!model.available) {
+            bypassRestoration();
             window.__pharosRestoration = { mode: "ai", active: false, status: "model unavailable" };
             return;
           }
           // A wired model would insert the WASM denoise node here (see
           // lib/restore-model.js wiring notes) — full integration lands with
-          // the model file itself.
+          // the model file itself. Until then "ai" runs the light chain.
         }
-        restorationCtx = new AudioContext();
-        const srcNode = restorationCtx.createMediaElementSource(audio);
+        if (mode === "off") {
+          bypassRestoration();
+          window.__pharosRestoration = { mode: "off", active: false };
+          return;
+        }
+        if (!restorationCtx) {
+          restorationCtx = new AudioContext();
+          // Worklet first: on load failure the element stays unrouted →
+          // audio keeps flowing to the default destination (honest degrade).
+          await restorationCtx.audioWorklet.addModule(assetPath("/worklets/restore-worklet.js"));
+          restorationSrc = restorationCtx.createMediaElementSource(audio); // once, ever
+        }
+        restorationCtx.resume().catch(() => {});
         const hp = restorationCtx.createBiquadFilter();
         hp.type = "highpass";
         hp.frequency.value = 80; // turntable rumble band
-        const workletNode = await restorationCtx.audioWorklet.addModule("/worklets/restore-worklet.js")
-          .then(() => new AudioWorkletNode(restorationCtx, "restore-worklet"));
-        srcNode.connect(hp).connect(workletNode).connect(restorationCtx.destination);
+        const workletNode = new AudioWorkletNode(restorationCtx, "restore-worklet");
+        if (lightChain) { try { lightChain.hp.disconnect(); lightChain.worklet.disconnect(); } catch {} }
+        restorationSrc.disconnect();
+        restorationSrc.connect(hp).connect(workletNode).connect(restorationCtx.destination);
+        lightChain = { hp, worklet: workletNode };
         window.__pharosRestoration = { mode, active: true };
       } catch {
         // Restoration must never break playback: degrade to off honestly.
+        bypassRestoration();
         window.__pharosRestoration = { mode, active: false, status: "graph failed" };
       }
     };
