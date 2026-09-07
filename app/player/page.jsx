@@ -72,6 +72,58 @@ export default function PlayerIslandPage() {
       audio.play().catch(() => {});
     };
 
+    /**
+     * Gramophone-noise restoration (lib/restoration.js) — OFF by default.
+     * Builds the Web Audio graph inside the island: MediaElementSource →
+     * 80 Hz high-pass (rumble) → de-tick AudioWorklet → destination.
+     * AI mode requires a wired model (lib/restore-model.js) and reports
+     * honest unavailability otherwise. Never blocks the main thread beyond
+     * graph construction (the worklet runs on the audio render thread).
+     */
+    let restorationCtx = null;
+    const applyRestoration = async (mode) => {
+      try {
+        // Tear down any previous graph.
+        if (restorationCtx) { await restorationCtx.close().catch(() => {}); restorationCtx = null; }
+        if (mode === "off") {
+          window.__pharosRestoration = { mode: "off", active: false };
+          return;
+        }
+        if (mode === "ai") {
+          const model = await import("@/lib/restore-model.js").then((m) => m.checkModel());
+          if (!model.available) {
+            window.__pharosRestoration = { mode: "ai", active: false, status: "model unavailable" };
+            return;
+          }
+          // A wired model would insert the WASM denoise node here (see
+          // lib/restore-model.js wiring notes) — full integration lands with
+          // the model file itself.
+        }
+        restorationCtx = new AudioContext();
+        const srcNode = restorationCtx.createMediaElementSource(audio);
+        const hp = restorationCtx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 80; // turntable rumble band
+        const workletNode = await restorationCtx.audioWorklet.addModule("/worklets/restore-worklet.js")
+          .then(() => new AudioWorkletNode(restorationCtx, "restore-worklet"));
+        srcNode.connect(hp).connect(workletNode).connect(restorationCtx.destination);
+        window.__pharosRestoration = { mode, active: true };
+      } catch {
+        // Restoration must never break playback: degrade to off honestly.
+        window.__pharosRestoration = { mode, active: false, status: "graph failed" };
+      }
+    };
+
+    const readRestoration = () => {
+      try {
+        const raw = JSON.parse(localStorage.getItem("pf.restoration") ?? "null");
+        return raw?.mode ?? "off";
+      } catch { return "off"; }
+    };
+    const onRestorationChange = () => applyRestoration(readRestoration());
+    window.addEventListener("pharos:restoration", onRestorationChange);
+    applyRestoration(readRestoration());
+
     const persist = () => {
       try {
         localStorage.setItem("pf.player.queue", JSON.stringify({ tracks: queueRef.current, index: indexRef.current }));
@@ -97,6 +149,7 @@ export default function PlayerIslandPage() {
             case "play": audio.play().catch(() => {}); break;
             case "pause": audio.pause(); break;
             case "seek": if (Number.isFinite(Number(msg.payload))) audio.currentTime = Number(msg.payload); break;
+            case "speed": if (Number.isFinite(Number(msg.payload))) audio.playbackRate = Math.min(2, Math.max(0.5, Number(msg.payload))); break;
             case "skip": {
               const next = Math.min(Math.max(indexRef.current + (Number(msg.payload) || 1), 0), queueRef.current.length - 1);
               if (next !== indexRef.current) {
@@ -162,6 +215,7 @@ export default function PlayerIslandPage() {
 
     return () => {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("pharos:restoration", onRestorationChange);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
       audio.removeEventListener("play", onPlay);

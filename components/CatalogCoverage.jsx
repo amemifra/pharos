@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { crossReference, resolveArtistMbid } from "@/lib/discography";
+import { catalogGet, keys } from "@/lib/catalogstore";
 
 /**
  * Catalog coverage panel — the inverse process made visible.
@@ -18,6 +19,7 @@ import { crossReference, resolveArtistMbid } from "@/lib/discography";
  */
 export default function CatalogCoverage({ artist }) {
   const [data, setData] = useState(null);
+  const [fill, setFill] = useState(null);
   const [showMissing, setShowMissing] = useState(false);
 
   useEffect(() => {
@@ -26,12 +28,17 @@ export default function CatalogCoverage({ artist }) {
     crossReference(artist)
       .then((r) => alive && setData(r))
       .catch(() => {});
+    // F4: per-track coverage from the published fill record (tracks with ≥1
+    // link vivo, not just albums available) — null until a peer filled it.
+    catalogGet(keys.fill(artist)).then((f) => alive && setFill(f)).catch(() => {});
     return () => { alive = false; };
   }, [artist]);
 
   if (!data || !data.entries.length) return null;
 
   const pct = Math.round(data.coverage * 100);
+  const trackCount = fill ? Object.keys(fill.tracks ?? {}).length : 0;
+  const filledCount = fill ? Object.values(fill.tracks ?? {}).filter((v) => v?.length).length : 0;
   const missing = data.entries.filter((e) => e.status === "missing");
   const available = data.entries.filter((e) => e.status === "available");
 
@@ -51,6 +58,12 @@ export default function CatalogCoverage({ artist }) {
       <div className="mt-2 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
         <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
+      {fill && (
+        <p className="mt-1 text-xs text-zinc-500" data-testid="track-coverage">
+          Track coverage: <span className="text-emerald-400">{filledCount}</span>/{trackCount} tracks with at least one verified link
+          {fill.stats?.liveness != null && <> · sampled liveness {Math.round(fill.stats.liveness * 100)}%</>}
+        </p>
+      )}
 
       {/* Available entries: playable now */}
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">

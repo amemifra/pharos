@@ -50,6 +50,8 @@ export default function AppShell({ children }) {
         fb.trainFromFeedback();
         if (!cancelled) await fb.adoptRankerConsensus();
         if (!cancelled) await fb.publishRankerConsensus();
+        // F3: share the per-version aggregates (same P2P consensus layer).
+        if (!cancelled) await fb.publishVersionConsensus();
       } catch {}
     })();
     return () => { cancelled = true; };

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePlayer } from "@/components/PlayerProvider";
 import { thumbUrl } from "@/lib/archive";
+import { loadPolicy, savePolicy, label, MODES } from "@/lib/restoration";
 import Icon from "@/components/Icon";
 
 const fmt = (s) => {
@@ -10,6 +11,50 @@ const fmt = (s) => {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 };
+
+const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+
+/**
+ * Playback-rate selector (F6): 0.5×–2×. Per-show preference for podcasts is
+ * persisted by lib/subscribe.js (pf.speed:<feedUrl>); for generic tracks the
+ * last chosen speed is reused. Applied via the player's setSpeed command.
+ */
+function SpeedControl({ setSpeed, current }) {
+  const feedUrl = current?.feedUrl;
+  const [speed, setLocal] = useState(1);
+  useEffect(() => {
+    let s = 1;
+    try {
+      const key = feedUrl ? `pf.speed:${feedUrl}` : "pf.speed:last";
+      s = Number(JSON.parse(localStorage.getItem(key) ?? "1")) || 1;
+    } catch {}
+    setLocal(s);
+    setSpeed(s);
+  }, [feedUrl, setSpeed]);
+  const pick = (s) => {
+    setLocal(s);
+    setSpeed(s);
+    try { localStorage.setItem(feedUrl ? `pf.speed:${feedUrl}` : "pf.speed:last", JSON.stringify(s)); } catch {}
+  };
+  return (
+    <section className="w-full max-w-md" aria-label="Playback speed">
+      <div className="flex items-center justify-center gap-2">
+        {SPEEDS.map((s) => (
+          <button
+            key={s}
+            onClick={() => pick(s)}
+            className={`rounded-full px-3 py-1 text-xs font-medium tabular-nums transition-colors ${
+              speed === s ? "bg-emerald-600 text-white" : "bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800"
+            }`}
+            aria-pressed={speed === s}
+          >
+            {s}×
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /**
  * Now Playing full-screen overlay (spec Phase 3, Spotify/YT Music pattern).
@@ -21,7 +66,15 @@ const fmt = (s) => {
  * Transition: CSS slide-up; disabled under prefers-reduced-motion.
  */
 export default function NowPlayingOverlay({ open, onClose }) {
-  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, jumpTo } = usePlayer();
+  // Restoration selector (Off/Light/AI) — writes pf.restoration; the island
+  // applies it live via the pharos:restoration event (lib/restoration.js).
+  const [restoration, setRestoration] = useState("off");
+  useEffect(() => { if (open) setRestoration(loadPolicy().mode); }, [open]);
+  const pickRestoration = (mode) => {
+    setRestoration(mode);
+    savePolicy({ mode });
+  };
+  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, jumpTo, setSpeed } = usePlayer();
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
 
@@ -139,6 +192,33 @@ export default function NowPlayingOverlay({ open, onClose }) {
             <Icon name="next" className="h-7 w-7" />
           </button>
         </div>
+
+        {/* Speed control 0.5×–2× (podcasts first, honest for music too) */}
+        <SpeedControl setSpeed={setSpeed} current={current} />
+
+        {/* Restoration selector — honest labels per mode (lib/restoration.js) */}
+        <section className="w-full max-w-md mb-4" aria-label="Audio restoration">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+            Restoration
+          </h3>
+          <div className="flex gap-2">
+            {MODES.map((mode) => (
+              <button
+                key={mode}
+                onClick={() => pickRestoration(mode)}
+                className={`rounded-full px-4 py-1.5 text-xs font-medium capitalize transition-colors ${
+                  restoration === mode
+                    ? "bg-emerald-600 text-white"
+                    : "bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800"
+                }`}
+                aria-pressed={restoration === mode}
+                title={label(mode)}
+              >
+                {mode === "ai" ? "AI" : mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Queue drawer */}
         <section className="w-full max-w-md" aria-label="Queue">

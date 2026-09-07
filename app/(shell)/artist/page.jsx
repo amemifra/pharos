@@ -6,6 +6,7 @@ import Link from "next/link";
 import { searchByArtist } from "@/lib/archive";
 import { normalizeSearchItem } from "@/lib/pipeline";
 import { crossReference } from "@/lib/discography";
+import { fillState, fillArtist } from "@/lib/fillengine";
 import { looksClassical, groupByWork } from "@/lib/classical";
 import { artistImage } from "@/lib/artistimage";
 import AlbumCard from "@/components/AlbumCard";
@@ -33,6 +34,31 @@ function ArtistPageInner() {
   const [rawItems, setRawItems] = useState(null);
   const [error, setError] = useState(null);
   const [showMissing, setShowMissing] = useState(false);
+  // F4: the shared distributed queue, rendered honestly (pending/claimed/filled).
+  const [fill, setFill] = useState(null);
+  const [filling, setFilling] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setFill(null);
+    fillState(artist).then((s) => alive && setFill(s)).catch(() => {});
+    return () => { alive = false; };
+  }, [artist]);
+
+  const fillNow = async () => {
+    setFilling(true);
+    try {
+      await fillArtist(artist, { force: false });
+      setFill(await fillState(artist));
+    } catch { /* honest failure: button re-enables, state stays pending */ }
+    setFilling(false);
+  };
+
+  const fillLabel = filling ? "Filling…"
+    : fill?.state === "filled" ? `Filled · ${Math.round((fill.fill?.stats?.fillRate ?? 0) * 100)}% tracks`
+    : fill?.state === "claimed" ? "Claimed by a peer"
+    : fill?.state === "pending" ? "Queued"
+    : "";
 
   useEffect(() => {
     let alive = true;
@@ -84,6 +110,21 @@ function ArtistPageInner() {
                 </>
               ) : "…"}
             </p>
+            {/* F4: the fill queue is actionable — on-demand processing plus the
+                honest shared state. No autoplay, no urgency mechanics. */}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={fillNow}
+                disabled={filling || fill?.state === "filled"}
+                data-testid="fill-now"
+                className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {fillLabel || "Fill now"}
+              </button>
+              {fill?.state === "claimed" && (
+                <span className="text-xs text-zinc-500">Another peer is working on this artist — the result will appear here for everyone.</span>
+              )}
+            </div>
           </div>
         </div>
       </header>

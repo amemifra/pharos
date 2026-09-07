@@ -53,6 +53,9 @@ export function PlayerProvider({ children }) {
   // "pending" (deciding).
   const [mode, setMode] = useState("pending");
   const inlineAudioRef = useRef(null);
+  // F3: per-version feedback bookkeeping (one completion per track per load).
+  const queueRef = useRef([]);
+  const completedRef = useRef(new Set());
 
   // Shell-side queue rehydration after a full reload.
   useEffect(() => {
@@ -99,6 +102,15 @@ export function PlayerProvider({ children }) {
         if (Number.isFinite(Number(msg.index))) setIndex(Number(msg.index));
         if (Number.isFinite(Number(msg.progress))) setProgress(Number(msg.progress));
         if (Number.isFinite(Number(msg.duration))) setDuration(Number(msg.duration));
+        // F3: per-version feedback — completion when ≥60% or ≥30s listened.
+        if (Number.isFinite(Number(msg.progress)) && Number.isFinite(Number(msg.duration)) && msg.duration > 0) {
+          const t = queueRef.current[msg.index];
+          if (t && !completedRef.current.has(t.id) &&
+              (msg.progress / msg.duration >= 0.6 || msg.progress >= 30)) {
+            completedRef.current.add(t.id);
+            import("@/lib/feedback").then((fb) => fb.recordVersionPlay(t.id, t.url, { completed: true }));
+          }
+        }
         break;
       case "pf.stall":
         // Auto policy: repeated buffering stalls downgrade the ceiling; the
@@ -178,6 +190,13 @@ export function PlayerProvider({ children }) {
     setQueue(q);
     setIndex(i);
     rememberRecent(q[i]);
+    completedRef.current = new Set();
+    queueRef.current = q;
+    // F3: record the START of a version play (completion is registered on
+    // pf.state once ≥60%/30s is listened).
+    import("@/lib/feedback").then((fb) => fb.recordVersionPlay(q[i].id, q[i].url, { completed: false }))
+      .then(() => import("@/lib/feedback").then((fb2) => fb2.publishVersionConsensus()))
+      .catch(() => {});
     if (mode === "island") {
       post({ type: "pf.load", tracks: q, index: i });
     } else if (mode === "inline") {
@@ -222,7 +241,14 @@ export function PlayerProvider({ children }) {
   /** Seek to an absolute position in seconds. */
   const seek = useCallback((seconds) => {
     if (mode === "island") post({ type: "pf.command", cmd: "seek", payload: seconds });
-    else if (mode === "inline" && inlineAudioRef.current) inlineAudioRef.current.currentTime = seconds;
+    else if (inlineAudioRef.current) inlineAudioRef.current.currentTime = seconds;
+  }, [mode, post]);
+
+  /** Playback rate 0.5×–2× (podcasts, F6): island or inline audio. */
+  const setSpeed = useCallback((rate) => {
+    const r = Math.min(2, Math.max(0.5, Number(rate) || 1));
+    if (mode === "island") post({ type: "pf.command", cmd: "speed", payload: r });
+    else if (inlineAudioRef.current) inlineAudioRef.current.playbackRate = r;
   }, [mode, post]);
 
   /** Jump to an absolute queue index (queue drawer click). */
@@ -239,7 +265,7 @@ export function PlayerProvider({ children }) {
 
   const value = {
     queue, index, current, playing, progress, duration,
-    playQueue, toggle, skip, seek, jumpTo,
+    playQueue, toggle, skip, seek, jumpTo, setSpeed,
     hasNext: index < queue.length - 1,
     hasPrev: index > 0,
   };

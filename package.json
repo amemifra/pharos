@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node tests/dq.test.mjs",
-    "e2e": "node tests/e2e/journeys.mjs"
+    "test": "node tests/dq.test.mjs && node tests/dq.fill.mjs && node tests/dq.podcast.mjs",
+    "e2e": "node tests/e2e/journeys.mjs",
+    "e2e:fill": "node tests/e2e/fill.mjs"
   },
   "dependencies": {
     "@orbitdb/core": "^4.0.0",
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
+    "docx": "^9.7.1",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.0.0"
   }
