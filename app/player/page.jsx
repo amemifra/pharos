@@ -162,8 +162,13 @@ export default function PlayerIslandPage() {
           if (!Array.isArray(msg.tracks) || !msg.tracks.length) return;
           queueRef.current = msg.tracks;
           indexRef.current = Math.max(0, Math.min(Number(msg.index) || 0, msg.tracks.length - 1));
+          // Session resume (shell-requested): seek here + optional autoplay.
+          // 0 = start from the beginning; play === false → load paused.
+          restorePosition = Number(msg.position) || 0;
+          resumePlaying = msg.play !== false;
           persist();
           loadAndPlay();
+          if (!resumePlaying) { audio.pause(); resumePlaying = false; }
           sendState(true);
           break;
         }

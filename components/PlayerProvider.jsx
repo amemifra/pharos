@@ -56,13 +56,20 @@ export function PlayerProvider({ children }) {
   // F3: per-version feedback bookkeeping (one completion per track per load).
   const queueRef = useRef([]);
   const completedRef = useRef(new Set());
+  // SESSION RESUME (shell-side): last observed position + playing state,
+  // persisted in pf.queue so ANY reload resumes from the same minute. The
+  // track URL/id is the map key (queue[index].url) — island and inline both
+  // restore from this single source of truth.
+  const resumeRef = useRef({ position: 0, playing: false });
+  const lastSessionSaveRef = useRef(0);
 
-  // Shell-side queue rehydration after a full reload.
+  // Shell-side queue + session rehydration after a full reload.
   useEffect(() => {
     const saved = readLS("pf.queue", null);
     if (saved && Array.isArray(saved.queue) && saved.queue.length) {
       setQueue(saved.queue);
       setIndex(saved.index ?? 0);
+      resumeRef.current = { position: Number(saved.position) || 0, playing: !!saved.playing };
     }
   }, []);
 
@@ -87,12 +94,19 @@ export function PlayerProvider({ children }) {
         setMode("island");
         // Re-send the queue ONLY if the island is not already on our current
         // track (shell full-reload case: island kept playing — do not restart).
+        // When we DO re-send, carry the session resume (position + play state).
         {
           const saved = readLS("pf.queue", null);
           if (saved?.queue?.length) {
             const shellCurrent = saved.queue[saved.index ?? 0]?.id ?? null;
             if (msg.trackId !== shellCurrent) {
-              post({ type: "pf.load", tracks: saved.queue, index: saved.index ?? 0 });
+              post({
+                type: "pf.load",
+                tracks: saved.queue,
+                index: saved.index ?? 0,
+                position: Number(saved.position) || 0,
+                play: !!saved.playing,
+              });
             }
           }
         }
@@ -102,6 +116,23 @@ export function PlayerProvider({ children }) {
         if (Number.isFinite(Number(msg.index))) setIndex(Number(msg.index));
         if (Number.isFinite(Number(msg.progress))) setProgress(Number(msg.progress));
         if (Number.isFinite(Number(msg.duration))) setDuration(Number(msg.duration));
+        // SESSION RESUME: throttle-persist the position + play state (3s) so
+        // a reload resumes from THIS minute, keyed by the track URL/id.
+        {
+          const now = Date.now();
+          if (now - lastSessionSaveRef.current > 3000) {
+            lastSessionSaveRef.current = now;
+            resumeRef.current = { position: Number(msg.progress) || 0, playing: !!msg.playing };
+            if (queueRef.current.length) {
+              writeLS("pf.queue", {
+                queue: queueRef.current,
+                index: Number.isFinite(Number(msg.index)) ? Number(msg.index) : index,
+                position: Number(msg.progress) || 0,
+                playing: !!msg.playing,
+              });
+            }
+          }
+        }
         // F3: per-version feedback — completion when ≥60% or ≥30s listened.
         if (Number.isFinite(Number(msg.progress)) && Number.isFinite(Number(msg.duration)) && msg.duration > 0) {
           const t = queueRef.current[msg.index];
@@ -130,16 +161,34 @@ export function PlayerProvider({ children }) {
 
   // Race guard: if the user hits Play while mode is "pending" (island still
   // booting), the command would be dropped by both branches of playQueue.
-  // Re-issue the current queue once the mode resolves.
+  // Re-issue the current queue once the mode resolves — WITH session resume.
   const modeRef = useRef(mode);
   useEffect(() => {
     if ((mode === "island" || mode === "inline") && modeRef.current === "pending") {
       modeRef.current = mode;
       if (queue.length && index >= 0) {
-        if (mode === "island") post({ type: "pf.load", tracks: queue, index });
-        else {
+        if (mode === "island") {
+          post({
+            type: "pf.load",
+            tracks: queue,
+            index,
+            position: resumeRef.current.position,
+            play: resumeRef.current.playing,
+          });
+        } else {
           const audio = inlineAudioRef.current;
-          if (audio && current) { audio.src = current.url; audio.play().catch(() => {}); }
+          const track = queue[index];
+          if (audio && track) {
+            audio.src = track.url;
+            const { position, playing } = resumeRef.current;
+            const onMeta = () => {
+              if (position > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+                audio.currentTime = Math.min(position, Math.max(0, audio.duration - 1));
+              }
+              if (playing) audio.play().catch(() => {}); // autoplay policy: paused at position
+            };
+            audio.addEventListener("loadedmetadata", onMeta, { once: true });
+          }
         }
       }
     } else {

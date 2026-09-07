@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { loadFeed, relativeDate } from "@/lib/podcast";
+import { loadFeed, relativeDate, bigArt } from "@/lib/podcast";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
@@ -113,7 +113,7 @@ function PodcastPageInner() {
         <header className="flex items-start gap-5">
           {data.show.image && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={data.show.image} alt="" className="h-28 w-28 rounded-xl object-cover" />
+            <img src={bigArt(data.show.image) ?? data.show.image} alt="" className="h-28 w-28 rounded-xl object-cover" />
           )}
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400/90">Podcast</p>
@@ -257,7 +257,7 @@ function CommunitySection({ onOpen }) {
           <li key={s.feedUrl} className="flex items-center gap-3 px-4 py-2.5">
             {s.image && (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={s.image} alt="" loading="lazy" className="h-8 w-8 rounded object-cover" />
+              <img src={bigArt(s.image) ?? s.image} alt="" loading="lazy" className="h-8 w-8 rounded object-cover" />
             )}
             <a className="flex-1 truncate text-sm hover:text-emerald-400" href={`/podcast?url=${encodeURIComponent(s.feedUrl)}`} onClick={(e) => { e.preventDefault(); onOpen(s.feedUrl); }}>
               {s.title}
@@ -421,7 +421,7 @@ function ChartsSection({ onOpen }) {
                 <span className="w-7 shrink-0 text-right text-xs tabular-nums text-zinc-600">{i + 1}</span>
                 {s.image && (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={s.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-md object-cover" />
+                  <img src={bigArt(s.image) ?? s.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-md object-cover" />
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-zinc-200 group-hover:text-emerald-400">{s.title}</span>
