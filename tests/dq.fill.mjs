@@ -11,6 +11,10 @@
  *   4. LEASE INTEGRITY — no double claim within TTL; expiry frees the lease.
  *   5. DEDUP — no duplicate URLs inside a track's version list.
  *   6. METADATA COMPLETENESS — every version carries format + duration fields.
+ *   7. NO REPEATED BASE TITLES — take/mix alternates folded into their host
+ *      work (foldAlternateTakes): numbered tracks never repeat a base title,
+ *      and folded alternates survive as playable version groups (own trackKey,
+ *      provenance traced to real item files).
  *
  * Usage: node tests/dq.fill.mjs
  */
@@ -74,6 +78,53 @@ check("claim namespace TTL is lease TTL", ttlForKey("queue:claim:x"), CLAIM_TTL_
   check("no data → honest quality basis", honest.basis === "quality" ? 1 : 0, 1, (v, t) => v === t);
 }
 
+// — 7) NO REPEATED BASE TITLES among numbered tracks (DQ stage:
+// foldAlternateTakes) — the "repeated tracks" failure (canonical 1–14 plus
+// takes/mixes rendered as separate numbered entries) is structurally
+// impossible. Base = title without trailing take/mix qualifier.
+{
+  const { foldAlternateTakes, trackBaseKey, normalizeAlbum } = await import("../lib/pipeline.js");
+  const mk = (name, title, url) => ({ id: `${name}`, title, rawTitle: title, url, format: "VBR MP3", number: 1, duration: 200 });
+  // Unit (pure): a take folds into its host work; a distinct work never folds.
+  const folded = foldAlternateTakes([
+    mk("a", "Taxman", "https://a/taxman.flac"),
+    mk("b", "Taxman (Take 1)", "https://a/take1.flac"),
+    mk("c", "Tomorrow Never Knows (Mono)", "https://a/tnk.flac"),
+    mk("d", "Paperback Writer (Mono)", "https://a/pw.flac"),
+  ]);
+  check("fold: take merges into host (numbered ≤)", folded.length, 3, (v, t) => v <= t);
+  check("fold: alternate keeps full play metadata", (folded[0].alternates ?? []).every((a) => a.id && a.url && a.title) && (folded[0].alternates ?? []).length === 1 ? 1 : 0, 1, (v, t) => v === t);
+  check("fold: distinct works stay numbered", folded.some((t) => t.title === "Paperback Writer (Mono)") ? 1 : 0, 1, (v, t) => v === t);
+  // Real item (the motivating case): Revolver 2022 mix deluxe.
+  const DQ_ITEM = "01-taxman-2022-mix_202606";
+  let meta = null;
+  try { meta = await fetchItemMetadata(DQ_ITEM); } catch { /* network below */ }
+  if (!meta?.files?.length) {
+    console.log("  ⚠ real-item fold check skipped (network unavailable)");
+  } else {
+    const album = normalizeAlbum(DQ_ITEM, meta);
+    const seen = new Map();
+    let dupBase = 0;
+    for (const t of album.tracks) {
+      const k = trackBaseKey(t.rawTitle);
+      if (seen.has(k)) dupBase++;
+      else seen.set(k, t.title);
+    }
+    check(`no repeated base titles (${DQ_ITEM})`, dupBase, 0, (v, t) => v <= t);
+    check(`alternates folded, never lost (${DQ_ITEM})`, album.tracks.reduce((s, t) => s + (t.alternates?.length ?? 0), 0), 1);
+    check("alternates keep playable urls", album.tracks.every((t) => (t.alternates ?? []).every((a) => a.url && a.id)) ? 1 : 0, 1, (v, t) => v === t);
+    // extractVersions: alternates are additional version groups (own trackKey),
+    // with the same provenance contract (A1: URL ∈ real files).
+    const groups = await extractVersions(DQ_ITEM, meta);
+    const realFiles = new Set(meta.files.filter((f) => /\.(mp3|flac|ogg|wav|m4a)$/i.test(f.name ?? "")).map((f) => f.name));
+    const altGroups = groups.filter((g) => (album.tracks.flatMap((t) => t.alternates ?? [])).some((a) => a.id === g.trackKey));
+    const phantom = altGroups.flatMap((g) => g.versions).filter((v) => !realFiles.has(v.file)).length;
+    check(`alternates extracted as version groups (${DQ_ITEM})`, altGroups.length, 1);
+    check(`alternate versions trace to real files (${DQ_ITEM})`, phantom, 0, (v, t) => v <= t);
+  }
+}
+
+
 console.log("\n═══ DQ: fill on real artists (PD-first collection) ═══");
 
 // PD-first sample: artists from georgeblood (public domain by construction).
@@ -88,7 +139,18 @@ if (!artists.length) {
 } else {
   const results = [];
   for (const artist of artists) {
-    const res = await fillArtist(artist, { peerId: "dq-peer" });
+    let res = await fillArtist(artist, { peerId: "dq-peer" });
+    // "nothing-to-fill" can be a transient MB unreachability (the empty
+    // crossref is memoized, and releaseClaim leaves a 1h retry tombstone):
+    // clear both and retry once — removing a network artifact, never a
+    // threshold cut. The tombstone only exists because of this same run's
+    // first attempt.
+    if (res.state === "nothing-to-fill") {
+      await new Promise((r) => setTimeout(r, 2000));
+      localStorage.removeItem("pf.store." + keys.crossref(artist));
+      localStorage.removeItem("pf.store." + keys.queueClaim(artist));
+      res = await fillArtist(artist, { peerId: "dq-peer" });
+    }
     results.push({ artist, res });
     console.log(`  ℹ ${artist}: ${res.state}${res.reason ? ` (${res.reason})` : ""}`);
   }

@@ -69,7 +69,7 @@ function AlbumPageInner() {
   const params = useSearchParams();
   const identifier = params.get("id") ?? "";
   const artistSegment = params.get("n");
-  const { playQueue, current, toggle, playing } = usePlayer();
+  const { playQueue, current, toggle, playing, seek } = usePlayer();
   const [album, setAlbum] = useState(null);
   const [error, setError] = useState(null);
   // Map trackId → {artist, title, confidence, level} of canonical metadata.
@@ -249,6 +249,28 @@ function AlbumPageInner() {
                         >
                           <span className="tabular-nums text-zinc-600">{fmt(track.compound.starts[k] ?? 0)}</span>
                           <span className="truncate">{work}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* Alternate takes/mixes (lib/pipeline foldAlternateTakes):
+                    NOT numbered tracks — attenuated sub-rows under the host
+                    work, each playable on its own (never lost, never a
+                    duplicate numbered entry). */}
+                {track.alternates?.length > 0 && (
+                  <ul className="mb-1 ml-12 border-l border-zinc-800 pl-3" data-testid="alternates">
+                    {track.alternates.map((alt) => (
+                      <li key={alt.id}>
+                        <button
+                          onClick={() => playQueue([alt], 0)}
+                          className="flex w-full items-center gap-2 py-1 text-left text-xs text-zinc-400 hover:text-emerald-400"
+                          title={`Alternate take: ${alt.title}`}
+                          data-testid="alternate-row"
+                        >
+                          <Icon name="play" className="h-2.5 w-2.5 shrink-0 text-zinc-600" />
+                          <span className="truncate">{alt.title}</span>
+                          {alt.duration && <span className="ml-auto tabular-nums text-zinc-600">{fmt(alt.duration)}</span>}
                         </button>
                       </li>
                     ))}

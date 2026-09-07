@@ -46,9 +46,12 @@ await record("Podcast · subscribe + play episode (real audio)", async (page) =>
   // Play the first episode.
   await page.click("ol li button");
   // Wait for the inline/island audio to actually start (real enclosure).
+  // The player lives in the /player island iframe by default (inline fallback
+  // only when pf.ready never arrives) — same lookup as tests/e2e/journeys.mjs.
   await page.waitForFunction(
     () => {
-      const a = document.querySelector("audio");
+      const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio");
+      const a = inIsland ?? document.querySelector("audio");
       return a && !a.paused && a.currentTime > 0;
     },
     { timeout: 45_000 }
