@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { SHELVES } from "@/lib/catalog";
 import { startWarmup } from "@/lib/catalogwarm";
 import Icon from "@/components/Icon";
+import PharosMark from "@/components/PharosMark";
 
 const NAV = [
   { href: "/", icon: "home", label: "Home" },
@@ -68,8 +69,8 @@ export default function AppShell({ children }) {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-zinc-950 border-r border-zinc-800/60 px-4 py-6 z-30">
         <Link href="/" className="flex items-center gap-2.5 px-2 mb-8">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600/15 text-emerald-400">
-            <Icon name="note" className="h-5 w-5" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600/15">
+            <PharosMark className="h-6 w-6" />
           </span>
           <span className="text-lg font-bold tracking-tight">
             Phar<span className="text-emerald-500">os</span>

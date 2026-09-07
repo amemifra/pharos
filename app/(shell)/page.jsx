@@ -8,6 +8,7 @@ import { batchSitelinks, pageviews } from "@/lib/notability";
 import { topListenedArtists } from "@/lib/feedback";
 import { normalizeSearchItem, byPopularity } from "@/lib/pipeline";
 import { SHELVES } from "@/lib/catalog";
+import PharosMark from "@/components/PharosMark";
 
 import AlbumCard from "@/components/AlbumCard";
 import ShelfRow from "@/components/ShelfRow";
@@ -78,8 +79,8 @@ export default function HomePage() {
       {/* Mobile header + compact search link (the full UI lives at /search) */}
       <header className="mb-8 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 md:hidden">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600/15 text-emerald-400">
-            <Icon name="note" className="h-5 w-5" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600/15">
+            <PharosMark className="h-6 w-6" />
           </span>
           <h1 className="text-2xl font-bold tracking-tight">
             Public<span className="text-emerald-500">Flac</span>

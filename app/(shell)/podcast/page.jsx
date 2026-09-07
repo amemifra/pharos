@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadFeed, relativeDate } from "@/lib/podcast";
-import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks } from "@/lib/subscribe";
+import { TOP_NATIONS, topPodcasts, resolveFeedUrl } from "@/lib/podcastcharts";
+import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
 
@@ -59,13 +60,15 @@ function PodcastPageInner() {
 
   if (!feedUrl) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-10">
+      <main className="mx-auto max-w-6xl px-4 py-10">
         <h1 className="text-2xl font-bold tracking-tight">Podcasts</h1>
         <p className="mt-2 text-sm text-zinc-500">
           Add a show by its RSS feed URL. Discovery via Podcast Index is optional (pf.pixkey).
         </p>
         <SubsList subs={subs} onChange={setSubs} />
         <AddFeedForm onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
+        <CommunitySection onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
+        <ChartsSection onOpen={(u) => { window.location.href = `/podcast?url=${encodeURIComponent(u)}`; }} />
       </main>
     );
   }
@@ -202,6 +205,127 @@ function AddFeedForm({ onOpen }) {
         Open
       </button>
     </form>
+  );
+}
+
+/** Community registry: shows added by peers (shared OrbitDB catalog). */
+function CommunitySection({ onOpen }) {
+  const [shows, setShows] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    communityShows().then((s) => alive && setShows(s));
+    return () => { alive = false; };
+  }, []);
+  if (shows === null || !shows.length) return null;
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
+        From the community · shared catalog ({shows.length})
+      </h2>
+      <ul className="divide-y divide-zinc-800/60 rounded-xl bg-zinc-900/50">
+        {shows.slice(0, 50).map((s) => (
+          <li key={s.feedUrl} className="flex items-center gap-3 px-4 py-2.5">
+            {s.image && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={s.image} alt="" loading="lazy" className="h-8 w-8 rounded object-cover" />
+            )}
+            <a className="flex-1 truncate text-sm hover:text-emerald-400" href={`/podcast?url=${encodeURIComponent(s.feedUrl)}`}>
+              {s.title}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * ChartsSection — the most-used podcasts per nation, automatically (F6
+ * discovery, zero keys): Apple public charts, tier-A markets 1000 shows,
+ * others 100. Click → feed URL resolved via public /lookup → show page.
+ * Default nation from the browser locale, honest empty state on failure.
+ */
+function ChartsSection({ onOpen }) {
+  const [nation, setNation] = useState(null);
+  const [shows, setShows] = useState(null);
+  const [opening, setOpening] = useState(null);
+
+  useEffect(() => {
+    let region = "us";
+    try {
+      const loc = navigator.language?.split("-")[1];
+      if (loc && TOP_NATIONS.some((n) => n.code === loc.toLowerCase())) region = loc.toLowerCase();
+    } catch {}
+    setNation(region);
+  }, []);
+
+  useEffect(() => {
+    if (!nation) return;
+    let alive = true;
+    setShows(null);
+    topPodcasts(nation).then((s) => alive && setShows(s));
+    return () => { alive = false; };
+  }, [nation]);
+
+  const open = async (show) => {
+    setOpening(show.id);
+    try {
+      const feedUrl = await resolveFeedUrl(show.id);
+      if (feedUrl) onOpen(feedUrl);
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  const depth = ["us", "cn", "in", "gb", "de", "jp"].includes(nation) ? 1000 : 100;
+  return (
+    <section className="mt-10">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
+        Most played · by nation (Apple public charts, top {depth})
+      </h2>
+      <div className="mb-5 flex flex-wrap gap-1.5">
+        {TOP_NATIONS.map((n) => (
+          <button
+            key={n.code}
+            onClick={() => setNation(n.code)}
+            title={n.name}
+            className={`rounded-full px-2.5 py-1 text-base leading-none transition-colors ${
+              nation === n.code ? "bg-emerald-600/25 ring-1 ring-emerald-500" : "hover:bg-zinc-800"
+            }`}
+          >
+            {n.flag}
+          </button>
+        ))}
+      </div>
+      {shows === null && <p className="py-8 text-sm text-zinc-500">Loading chart…</p>}
+      {shows?.length === 0 && (
+        <p className="py-8 text-sm text-zinc-500">Chart unavailable for this nation right now.</p>
+      )}
+      {shows?.length > 0 && (
+        <ol className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+          {shows.map((s, i) => (
+            <li key={s.id}>
+              <button
+                onClick={() => open(s)}
+                disabled={opening === s.id}
+                className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-zinc-900 disabled:opacity-50"
+              >
+                <span className="w-7 shrink-0 text-right text-xs tabular-nums text-zinc-600">{i + 1}</span>
+                {s.image && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={s.image} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-md object-cover" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-zinc-200 group-hover:text-emerald-400">{s.title}</span>
+                  <span className="block truncate text-xs text-zinc-600">{s.artist}</span>
+                </span>
+                {opening === s.id && <span className="text-xs text-zinc-500">…</span>}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 
