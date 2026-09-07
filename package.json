@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "collab:build": "npx -y esbuild@0.25.0 lib/collab.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=public/collab.js",
     "start": "next start",
     "test": "node tests/dq.test.mjs && node tests/dq.fill.mjs && node tests/dq.podcast.mjs",
     "e2e": "node tests/e2e/journeys.mjs",
