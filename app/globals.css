@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* —— Focus accessibile —— */
+:focus-visible {
+  outline: 2px solid var(--color-emerald-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* —— Skeleton shimmer (solo CSS) —— */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--color-zinc-800) 25%, var(--color-zinc-700) 50%, var(--color-zinc-800) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* —— Horizontal shelves: thin, discreet scrollbar —— */
+.shelf-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-zinc-700) transparent;
+}
+.shelf-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.shelf-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-zinc-700);
+  border-radius: 9999px;
+}
+.shelf-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* —— Range input del player: look custom minimale —— */
+.player-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.player-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-emerald-500) var(--fill, 0%),
+    var(--color-zinc-700) var(--fill, 0%)
+  );
+}
+.player-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.player-range:hover::-webkit-slider-thumb,
+.player-range:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.player-range::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-zinc-700);
+}
+.player-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-emerald-500);
+}
+.player-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: white;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.player-range:hover::-moz-range-thumb,
+.player-range:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
