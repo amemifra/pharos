@@ -24,6 +24,10 @@ function PodcastPageInner() {
   const [subs, setSubs] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [played, setPlayed] = useState({});
+  // isPlayable wiring (P1 residuo): episodes whose enclosure HEAD-checks as
+  // restricted (401/403) or dead are never queued — honest label instead.
+  const [unplayable, setUnplayable] = useState({});
+  const [checking, setChecking] = useState(null);
 
   const load = async (force = false) => {
     setError(null);
@@ -159,25 +163,48 @@ function PodcastPageInner() {
           {data.episodes.map((ep) => {
             const p = played[ep.guid];
             const isPlayed = !!p?.progressSec;
+            const dead = unplayable[ep.guid];
             return (
               <li key={ep.guid}>
                 <button
-                  onClick={() => {
-                    const t = episodesToTracks([ep], data?.show?.image ?? null);
-                    markPlayedAndPlay(ep, p, playQueue, t);
+                  onClick={async () => {
+                    if (dead || checking === ep.guid) return;
+                    // Restricted/dead guard (lib/podcast.isPlayable): a 401/403
+                    // enclosure is treated exactly like a lending-restricted
+                    // archive item — never queued, honest feedback instead.
+                    setChecking(ep.guid);
+                    try {
+                      const { isPlayable } = await import("@/lib/podcast");
+                      if (!(await isPlayable(ep))) {
+                        setUnplayable((m) => ({ ...m, [ep.guid]: true }));
+                        return;
+                      }
+                      const t = episodesToTracks([ep], data?.show?.image ?? null);
+                      markPlayedAndPlay(ep, p, playQueue, t);
+                    } finally {
+                      setChecking(null);
+                    }
                   }}
-                  className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-zinc-800/60"
+                  className={`flex w-full items-start gap-3 px-4 py-3 text-left ${dead ? "opacity-50" : "hover:bg-zinc-800/60"}`}
                 >
                   <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${isPlayed ? "bg-emerald-500" : "border border-zinc-600"}`} aria-label={isPlayed ? "played" : "unplayed"} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{ep.title}</span>
                     <span className="mt-0.5 block text-xs text-zinc-500">
-                      {relativeDate(ep.pubDateMs)}
-                      {ep.durationMs ? ` · ${Math.round(ep.durationMs / 60000)} min` : ""}
-                      {isVideoEnclosure(ep) ? " · video podcast" : ""}
+                      {dead ? (
+                        <span className="text-amber-400">🔒 unavailable — the publisher restricts this episode (401/403)</span>
+                      ) : checking === ep.guid ? (
+                        "checking availability…"
+                      ) : (
+                        <>
+                          {relativeDate(ep.pubDateMs)}
+                          {ep.durationMs ? ` · ${Math.round(ep.durationMs / 60000)} min` : ""}
+                          {isVideoEnclosure(ep) ? " · video podcast" : ""}
+                        </>
+                      )}
                     </span>
                   </span>
-                  <Icon name="play" className="mt-1 h-4 w-4 text-zinc-500" />
+                  <Icon name={dead ? "close" : "play"} className="mt-1 h-4 w-4 text-zinc-500" />
                 </button>
               </li>
             );
