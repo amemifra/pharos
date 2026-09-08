@@ -2,6 +2,7 @@ import { PlayerProvider } from "@/components/PlayerProvider";
 import NowPlayingBar from "@/components/NowPlayingBar";
 import AppShell from "@/components/AppShell";
 import HashRedirect from "@/components/HashRedirect";
+import Splash from "@/components/Splash";
 
 /**
  * Shell layout — everything EXCEPT the player island.
@@ -14,6 +15,7 @@ import HashRedirect from "@/components/HashRedirect";
 export default function ShellLayout({ children }) {
   return (
     <PlayerProvider>
+      <Splash />
       <HashRedirect />
       <AppShell>{children}</AppShell>
       <NowPlayingBar />

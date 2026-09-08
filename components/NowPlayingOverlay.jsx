@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "@/components/PlayerProvider";
 import { thumbUrl } from "@/lib/archive";
 import { loadPolicy, savePolicy, label, MODES } from "@/lib/restoration";
+import Manifesto from "@/components/Manifesto";
 import Icon from "@/components/Icon";
 
 const fmt = (s) => {
@@ -132,6 +133,8 @@ export default function NowPlayingOverlay({ open, onClose }) {
         <span className="h-1.5 w-12 rounded-full bg-zinc-700" />
       </div>
 
+      {/* Manifesto ⓘ (P0-DESIGN): the promise stated where people listen */}
+      <span className="absolute right-14 top-3.5"><Manifesto align="right" drop="down" /></span>
       <button
         onClick={onClose}
         className="absolute right-4 top-4 rounded-full p-2 text-zinc-400 transition-colors hover:text-white"

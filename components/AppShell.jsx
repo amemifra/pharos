@@ -8,6 +8,7 @@ import { startWarmup } from "@/lib/catalogwarm";
 import { applyCulturalCanon } from "@/lib/culture";
 import Icon from "@/components/Icon";
 import PharosMark from "@/components/PharosMark";
+import Manifesto from "@/components/Manifesto";
 import FeedbackDialog from "@/components/FeedbackDialog";
 
 const NAV = [
@@ -129,8 +130,9 @@ export default function AppShell({ children }) {
           Report an issue
         </button>
 
-        <p className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-700">
-          A lighthouse for public culture · archive.org + open sources · zero servers
+        <p className="mt-auto flex items-center gap-2 px-3 text-[11px] leading-relaxed text-zinc-700">
+          <span>A lighthouse for public culture · archive.org + open sources · zero servers</span>
+          <Manifesto align="left" />
           {warm.done > 0 && (
             <span className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-500/80">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
