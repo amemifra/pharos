@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { loadFeed, relativeDate, bigArt } from "@/lib/podcast";
+import { loadFeed, relativeDate, bigArt, weeklyListeningHours } from "@/lib/podcast";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
@@ -282,7 +282,9 @@ function ChartsSection({ onOpen }) {
   const [shows, setShows] = useState(null);
   const [stats, setStats] = useState({});
   const [opening, setOpening] = useState(null);
-  const [sort, setSort] = useState("chart"); // chart | listens | genre | title
+  const [sort, setSort] = useState("chart"); // chart | time | listens | genre | title
+  const [weekHours, setWeekHours] = useState({}); // showId → est. h/week
+  const [timeLoading, setTimeLoading] = useState(false);
   const [genre, setGenre] = useState("");
   const [query, setQuery] = useState("");
 
@@ -326,6 +328,39 @@ function ChartsSection({ onOpen }) {
     return () => { alive = false; };
   }, [nation]);
 
+  // "Listening time" sort: the honest metric the owner asked for — how much
+  // TIME a show costs per week = episodes/week × avg duration, from each
+  // show's own RSS feed. Apple charts publish positions, never play counts.
+  // Bounded scan: top 60 shows, target 30 measured, concurrency 4; feed
+  // snapshots are catalog-cached (epfeed:, 36h) so repeats are cheap.
+  useEffect(() => {
+    if (sort !== "time" || !nation || !shows?.length) return;
+    let alive = true;
+    setTimeLoading(true);
+    setWeekHours({});
+    (async () => {
+      const TARGET = 30;
+      const top = shows.slice(0, 60);
+      const out = {};
+      let i = 0;
+      const worker = async () => {
+        while (alive && i < top.length && Object.keys(out).length < TARGET) {
+          const s = top[i++];
+          try {
+            const feedUrl = await resolveFeedUrl(s.id);
+            if (!feedUrl) continue;
+            const feed = await loadFeed(feedUrl);
+            const h = weeklyListeningHours(feed?.episodes);
+            if (h != null) out[s.id] = h;
+          } catch {}
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      if (alive) setWeekHours(out);
+    })().finally(() => { if (alive) setTimeLoading(false); });
+    return () => { alive = false; };
+  }, [sort, nation, shows]);
+
   const open = async (show) => {
     setOpening(show.id);
     try {
@@ -349,9 +384,12 @@ function ChartsSection({ onOpen }) {
       const q = query.trim().toLowerCase();
       list = list.filter((s) => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q));
     }
-    const withRank = list.map((s, i) => ({ ...s, avgRank: stats[s.id]?.avgRank ?? null }));
+    const withRank = list.map((s, i) => ({ ...s, avgRank: stats[s.id]?.avgRank ?? null, weekHours: weekHours[s.id] ?? null }));
     switch (sort) {
-      case "listens": // average daily position from the public-chart feed
+      case "time": // est. listening hours/week; shows without duration data last (honest)
+        return [...withRank].sort((a, b) =>
+          (b.weekHours ?? -1) - (a.weekHours ?? -1) || a.title.localeCompare(b.title));
+      case "listens": // average daily chart POSITION from the public-chart history (not listens!)
         return [...withRank].sort((a, b) =>
           (a.avgRank ?? 9999) - (b.avgRank ?? 9999) || (a.avgRank == null ? 1 : 0) - (b.avgRank == null ? 1 : 0));
       case "genre":
@@ -366,7 +404,7 @@ function ChartsSection({ onOpen }) {
   return (
     <section className="mt-10">
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
-        Most played · by nation (Apple public charts, full chart · {view.length} shows)
+        Podcast charts · by nation (Apple public daily chart · {view.length} shows)
       </h2>
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <select
@@ -385,8 +423,9 @@ function ChartsSection({ onOpen }) {
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort"
           className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600">
-          <option value="chart">Sort: chart position</option>
-          <option value="listens">Sort: avg listens (daily feed)</option>
+          <option value="chart">Sort: chart position (Apple, daily)</option>
+          <option value="time">Sort: est. listening time (h/week)</option>
+          <option value="listens">Sort: avg chart position (daily history)</option>
           <option value="genre">Sort: genre</option>
           <option value="title">Sort: title</option>
         </select>
@@ -405,6 +444,15 @@ function ChartsSection({ onOpen }) {
         />
       </div>
       {shows === null && <p className="py-8 text-sm text-zinc-500">Loading chart…</p>}
+      {sort === "time" && shows?.length > 0 && (
+        <p className="mb-3 text-xs text-zinc-600" aria-live="polite">
+          {timeLoading
+            ? "Measuring listening time from show feeds…"
+            : Object.keys(weekHours).length
+              ? "Estimated listening time = episodes/week × avg duration, from each show's own RSS feed. Shows without duration data rank last (no data, honestly)."
+              : "No duration data available from the scanned show feeds yet."}
+        </p>
+      )}
       {shows?.length === 0 && (
         <p className="py-8 text-sm text-zinc-500">Chart unavailable for this nation right now.</p>
       )}
@@ -425,7 +473,12 @@ function ChartsSection({ onOpen }) {
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-zinc-200 group-hover:text-emerald-400">{s.title}</span>
-                  <span className="block truncate text-xs text-zinc-600">{s.artist}</span>
+                  <span className="block truncate text-xs text-zinc-600">
+                    {s.artist}
+                    {s.weekHours != null && (
+                      <span className="ml-1.5 tabular-nums text-zinc-500">· ≈{s.weekHours.toFixed(1)} h/wk</span>
+                    )}
+                  </span>
                 </span>
                 {opening === s.id && <span className="text-xs text-zinc-500">…</span>}
               </button>
