@@ -90,7 +90,7 @@ async function journey(browser, { name, query, expectArtist }) {
     // archive.org rate limiting (metadata fetch fails silently) — a fresh
     // attempt after a pause is the honest mitigation, not a fake pass.
     const audioUp = async () => page.waitForFunction(
-      () => { const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })(); return a && a.src && !a.paused && a.currentTime > 0; },
+      () => { const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })(); return a && a.src && !a.paused && a.currentTime > 0; },
       { timeout: 45_000 }
     );
     let played = false;
@@ -114,12 +114,12 @@ async function journey(browser, { name, query, expectArtist }) {
     }
     if (!played) throw new Error("audio did not start after 3 attempts (rate limit or source offline)");
     const { src, time1 } = await page.evaluate(() => {
-      const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })();
+      const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })();
       if (!a) throw new Error("no audio element found (island or inline)");
       return { src: a.src, time1: a.currentTime };
     });
     await page.waitForTimeout(2500);
-    const time2 = await page.evaluate(() => ((() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })()).currentTime);
+    const time2 = await page.evaluate(() => ((() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })()).currentTime);
     if (time2 <= time1) throw new Error(`audio not advancing (${time1} → ${time2})`);
 
     // 4) The NowPlayingBar shows something (UI consistent with the audio)
@@ -181,8 +181,8 @@ try {
   const firstCard = page.locator("a[href*='/album']").first();
   await firstCard.waitFor({ timeout: 30_000 });
   await firstCard.locator("button[aria-label^='Play']").click();
-  await page.waitForFunction(() => { const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })(); return a && !a.paused && a.currentTime > 0; }, { timeout: 45_000 });
-  const t1 = await page.evaluate(() => ((() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })()).currentTime);
+  await page.waitForFunction(() => { const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })(); return a && !a.paused && a.currentTime > 0; }, { timeout: 45_000 });
+  const t1 = await page.evaluate(() => ((() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })()).currentTime);
   // Navigate away and back (client-side, via Link): artist page (AlbumCard's
   // cover link) then Home tab. The island audio must survive both.
   await page.locator("a[href*='/album']").first().click();
@@ -192,7 +192,7 @@ try {
   await page.locator("nav a, aside a").filter({ hasText: "Home" }).first().click();
   await page.waitForTimeout(2000);
   const persisted = await page.evaluate(() => {
-    const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio"); return inIsland ?? document.querySelector("audio"); })();
+    const a = (() => { const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio"); return inIsland ?? document.querySelector("video, audio"); })();
     if (!a) throw new Error("no audio element after navigation");
     return { paused: a.paused, t: a.currentTime };
   });

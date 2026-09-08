@@ -20,7 +20,7 @@ import { assetPath } from "@/lib/basepath";
  *   onMessage: called for every validated pf.* message from the island.
  *   islandRef: ref to the iframe element (the shell posts into contentWindow).
  */
-export default function PlayerIsland({ onMessage, islandRef }) {
+export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden" }) {
   const handlerRef = useRef(onMessage);
   handlerRef.current = onMessage;
 
@@ -35,15 +35,26 @@ export default function PlayerIsland({ onMessage, islandRef }) {
     return () => window.removeEventListener("message", onWindowMessage);
   }, []);
 
+  // View states for VIDEO podcasts (owner): hidden = 0×0 as before; pip =
+  // floating mini video; full = full-page (plus native fullscreen via the
+  // iframe allow attribute). Audio-only tracks never leave "hidden".
+  const frameClass =
+    videoView === "pip"
+      ? "fixed bottom-20 right-4 z-50 h-44 w-80 overflow-hidden rounded-lg border border-zinc-700 bg-black shadow-2xl md:bottom-20"
+      : videoView === "full"
+        ? "fixed inset-0 z-50 h-full w-full border-0 bg-black"
+        : "hidden h-0 w-0 border-0";
+
   return (
     <iframe
       ref={islandRef}
       src={assetPath("/player/")}
       title="Pharos player island"
       sandbox="allow-scripts allow-same-origin"
-      className="hidden h-0 w-0 border-0"
-      aria-hidden="true"
-      tabIndex={-1}
+      allow="fullscreen"
+      className={frameClass}
+      aria-hidden={videoView === "hidden"}
+      tabIndex={videoView === "hidden" ? -1 : 0}
     />
   );
 }

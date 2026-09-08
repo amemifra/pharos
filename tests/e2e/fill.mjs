@@ -50,8 +50,8 @@ await record("Podcast · subscribe + play episode (real audio)", async (page) =>
   // only when pf.ready never arrives) — same lookup as tests/e2e/journeys.mjs.
   await page.waitForFunction(
     () => {
-      const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("audio");
-      const a = inIsland ?? document.querySelector("audio");
+      const inIsland = document.querySelector("iframe")?.contentDocument?.querySelector("video, audio");
+      const a = inIsland ?? document.querySelector("video, audio");
       return a && !a.paused && a.currentTime > 0;
     },
     { timeout: 45_000 }

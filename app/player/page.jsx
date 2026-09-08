@@ -294,8 +294,16 @@ export default function PlayerIslandPage() {
     };
   }, []);
 
-  // The island renders no visible UI; the shell's NowPlayingBar is the face.
+  // The island renders no visible UI for audio; for VIDEO podcasts the shell
+  // expands this iframe (pip/full) and the <video> fills it (owner request:
+  // the video IS the preview, expandable to page/full screen).
   return (
-    <audio ref={audioRef} preload="metadata" style={{ display: "none" }} aria-hidden="true" />
+    <video
+      ref={audioRef}
+      playsInline
+      controls
+      preload="metadata"
+      style={{ position: "fixed", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
+    />
   );
 }
