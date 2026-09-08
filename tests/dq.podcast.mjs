@@ -70,5 +70,30 @@ if (sampled > 0) {
   console.log("  ⚠ no enclosures sampled (network unavailable) — skipped");
 }
 
+// isPlayable (P1 residuo): HEAD-check restricted guard — 401/403 → not
+// playable, 405/2xx → playable, network failure → honest false.
+{
+  const { isPlayable } = await import("../lib/podcast.js");
+  const realFetch = globalThis.fetch;
+  const ep = (status) => ({ url: `https://cdn.example/${status}.mp3` });
+  const withStatus = (s) =>
+    (globalThis.fetch = async () => ({ ok: s >= 200 && s < 300, status: s }));
+  try {
+    globalThis.fetch = withStatus(200);
+    check("isPlayable: 200 → playable", (await isPlayable(ep(200))) === true);
+    globalThis.fetch = withStatus(403);
+    check("isPlayable: 403 → restricted", (await isPlayable(ep(403))) === false);
+    globalThis.fetch = withStatus(401);
+    check("isPlayable: 401 → restricted", (await isPlayable(ep(401))) === false);
+    globalThis.fetch = withStatus(405);
+    check("isPlayable: 405 (HEAD refused) → playable", (await isPlayable(ep(405))) === true);
+    globalThis.fetch = async () => { throw new Error("network down"); };
+    check("isPlayable: network failure → honest false", (await isPlayable(ep(0))) === false);
+    check("isPlayable: missing url → false", (await isPlayable({})) === false);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) process.exit(1);
