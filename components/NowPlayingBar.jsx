@@ -56,15 +56,22 @@ export default function NowPlayingBar() {
         aria-label="Track progress"
       />
       <div className="flex h-16 items-center gap-3 px-3 md:px-4">
-        {/* mini cover */}
+        {/* mini cover — archive.org thumbnail; podcasts get their own icon
+            (a guid is not an item id: thumbUrl would 404, icon per owner) */}
         <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={thumbUrl(albumId)}
-            alt=""
-            className="h-full w-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
-          />
+          {current.medium === "podcast" ? (
+            <span className="flex h-full w-full items-center justify-center text-zinc-500">
+              <Icon name="podcast" className="h-6 w-6" />
+            </span>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={thumbUrl(albumId)}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          )}
         </div>
 
         {/* title/artist — tap opens the full-screen Now Playing overlay */}
@@ -76,6 +83,8 @@ export default function NowPlayingBar() {
           <p className="truncate text-sm font-semibold">{current.title}</p>
           <p className="truncate text-xs text-zinc-500">
             {fmt(progress)} / {fmt(duration)}
+            {current.medium === "podcast" && " · podcast"}
+            {current.video && " · video track (audio playback)"}
           </p>
         </button>
 

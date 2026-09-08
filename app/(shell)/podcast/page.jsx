@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadFeed, relativeDate, bigArt, weeklyListeningHours } from "@/lib/podcast";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
-import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows } from "@/lib/subscribe";
+import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows, isVideoEnclosure } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
 
@@ -174,6 +174,7 @@ function PodcastPageInner() {
                     <span className="mt-0.5 block text-xs text-zinc-500">
                       {relativeDate(ep.pubDateMs)}
                       {ep.durationMs ? ` · ${Math.round(ep.durationMs / 60000)} min` : ""}
+                      {isVideoEnclosure(ep) ? " · video podcast" : ""}
                     </span>
                   </span>
                   <Icon name="play" className="mt-1 h-4 w-4 text-zinc-500" />
