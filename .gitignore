@@ -3,3 +3,6 @@ node_modules/
 out/
 *.log
 .DS_Store
+
+# Handoff/swarm notes: local only, mai nella storia git
+docs/HANDOFF*.md
