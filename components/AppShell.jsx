@@ -134,7 +134,9 @@ export default function AppShell({ children }) {
           {warm.done > 0 && (
             <span className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-500/80">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-              P2P catalog: {warm.done} artists mapped, growing
+              {/* #28: honest label — until P2P replication is verified
+                  browser-to-browser, this counter describes the LOCAL catalog. */}
+              Local catalog: {warm.done} artists mapped, growing
               {warm.artist ? ` · ${warm.artist}` : ""}
             </span>
           )}
