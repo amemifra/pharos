@@ -201,8 +201,20 @@ export function PlayerProvider({ children }) {
   // the conditional re-send (it knows the island's current trackId).
 
   // Persist the shell-side queue (the island keeps its own pf.player.queue).
+  // Defect #27 (HANDOFF-REVIEW): this fired on EVERY queue/index change and
+  // rewrote the record WITHOUT position/playing → the saved minute + play
+  // state were clobbered (session resume broke: reload → paused from 0 or
+  // silent no-resume). MERGE with the saved record instead: queue/index
+  // update, position/playing survive until the next island pf.state
+  // (throttled 3s) refreshes them with live values.
   useEffect(() => {
-    if (queue.length) writeLS("pf.queue", { queue, index });
+    if (!queue.length) return;
+    const saved = readLS("pf.queue", null);
+    writeLS("pf.queue", {
+      ...(saved && typeof saved === "object" ? saved : {}),
+      queue,
+      index,
+    });
   }, [queue, index]);
 
   /** Persist play history for /library (dedup by track id, cap 20). */
