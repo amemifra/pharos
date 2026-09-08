@@ -140,6 +140,24 @@ export function PlayerProvider({ children }) {
             }
           }
         }
+        // PODCAST PROGRESS (#25, owner metric = listening TIME, never plays):
+        // while a podcast episode plays, persist pf.played:<guid> with the
+        // throttled 3s cadence (same block — one timer, zero extra work).
+        // States: progressSec 0 → unplayed, >0 → partial, ≥90% → complete.
+        {
+          const idx = Number.isFinite(Number(msg.index)) ? Number(msg.index) : index;
+          const pt = queueRef.current[idx];
+          if (pt?.medium === "podcast" && pt?.id) {
+            const dur = Number(msg.duration) || 0;
+            const prog = Number(msg.progress) || 0;
+            writeLS(`pf.played:${pt.id}`, {
+              at: Date.now(),
+              progressSec: Math.round(prog),
+              durationSec: Math.round(dur),
+              complete: dur > 0 ? prog / dur >= 0.9 : false,
+            });
+          }
+        }
         // F3: per-version feedback — completion when ≥60% or ≥30s listened.
         if (Number.isFinite(Number(msg.progress)) && Number.isFinite(Number(msg.duration)) && msg.duration > 0) {
           const t = queueRef.current[msg.index];
@@ -265,12 +283,40 @@ export function PlayerProvider({ children }) {
   // shows it only while the failed track is still current.
   const [trackError, setTrackError] = useState(null);
 
+  /** Inline-mode play with metadata-time seek + saved speed (#22/#24). */
+  const inlinePlay = useCallback((track, position = 0) => {
+    const audio = inlineAudioRef.current;
+    if (!audio || !track) return;
+    audio.src = track.url;
+    // #24: re-apply the saved playback rate per track (podcast per-show
+    // pf.speed:<feedUrl>, else the last chosen pf.speed:last — the same
+    // contract SpeedControl reads/writes).
+    let rate = 1;
+    try {
+      const key = track.feedUrl ? `pf.speed:${track.feedUrl}` : "pf.speed:last";
+      rate = Number(JSON.parse(localStorage.getItem(key) ?? "1")) || 1;
+    } catch {}
+    audio.playbackRate = Math.min(2, Math.max(0.5, rate));
+    // #22: start at `position` seconds (compound sub-work offsets, podcast
+    // resume) — seek on loadedmetadata, before the first play().
+    const onMeta = () => {
+      if (position > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+        audio.currentTime = Math.min(position, Math.max(0, audio.duration - 1));
+      }
+      audio.play().catch(() => {});
+    };
+    audio.addEventListener("loadedmetadata", onMeta, { once: true });
+  }, []);
+
   /**
    * Load a queue and start playback. Same contract as the pre-island API.
    * @param {Track[]} tracks
    * @param {number} [startIndex=0]
+   * @param {{position?: number, query?: string}} [opts] position: start offset
+   *   in seconds (compound sub-work / podcast resume); query: the search or
+   *   surface the play originated from (ranker feedback #20).
    */
-  const playQueue = useCallback((tracks, startIndex = 0) => {
+  const playQueue = useCallback((tracks, startIndex = 0, opts = {}) => {
     if (!tracks?.length) return;
     // Format policy: resolve each track's variant per the active policy
     // (best | manual | auto with connection + stall feedback).
@@ -286,6 +332,11 @@ export function PlayerProvider({ children }) {
     rememberRecent(q[i]);
     completedRef.current = new Set();
     queueRef.current = q;
+    // #20: ranker feedback with the ORIGIN query when known (LTR signal for
+    // the search → play loop); empty query keeps the generic signal.
+    import("@/lib/feedback").then((fb) =>
+      fb.recordPlay(opts.query ?? "", { id: q[i].id, title: q[i].title, artist: q[i].artist ?? q[i].__albumArtist ?? "" }, 0, 0)
+    ).catch(() => {});
     // F3: record the START of a version play (completion is registered on
     // pf.state once ≥60%/30s is listened).
     import("@/lib/feedback").then((fb) => fb.recordVersionPlay(q[i].id, q[i].url, { completed: false }))
@@ -300,15 +351,13 @@ export function PlayerProvider({ children }) {
       .then(() => import("@/lib/feedback").then((fb2) => fb2.publishVersionConsensus()))
       .catch(() => {});
     if (mode === "island") {
-      post({ type: "pf.load", tracks: q, index: i });
+      // pf.load carries `position` (island contract): seek-on-load for
+      // compound sub-works and podcast resume (#22).
+      post({ type: "pf.load", tracks: q, index: i, position: Number(opts.position) || 0 });
     } else if (mode === "inline") {
-      const audio = inlineAudioRef.current;
-      if (audio) {
-        audio.src = q[i].url;
-        audio.play().catch(() => {});
-      }
+      inlinePlay(q[i], Number(opts.position) || 0);
     }
-  }, [mode, post, rememberRecent]);
+  }, [mode, post, rememberRecent, inlinePlay]);
 
   /** Toggle play/pause of the current track. */
   const toggle = useCallback(() => {
@@ -332,13 +381,9 @@ export function PlayerProvider({ children }) {
     if (mode === "island") {
       post({ type: "pf.load", tracks: queue, index: next });
     } else if (mode === "inline") {
-      const audio = inlineAudioRef.current;
-      if (audio && queue[next]) {
-        audio.src = queue[next].url;
-        audio.play().catch(() => {});
-      }
+      inlinePlay(queue[next], 0);
     }
-  }, [index, queue, mode, post, rememberRecent]);
+  }, [index, queue, mode, post, rememberRecent, inlinePlay]);
 
   /** Seek to an absolute position in seconds. */
   const seek = useCallback((seconds) => {
@@ -360,11 +405,8 @@ export function PlayerProvider({ children }) {
     setTrackError(null);
     rememberRecent(queue[i]);
     if (mode === "island") post({ type: "pf.load", tracks: queue, index: i });
-    else if (mode === "inline" && inlineAudioRef.current && queue[i]) {
-      inlineAudioRef.current.src = queue[i].url;
-      inlineAudioRef.current.play().catch(() => {});
-    }
-  }, [queue, mode, post, rememberRecent]);
+    else if (mode === "inline") inlinePlay(queue[i], 0);
+  }, [queue, mode, post, rememberRecent, inlinePlay]);
 
   const value = {
     queue, index, current, playing, progress, duration,

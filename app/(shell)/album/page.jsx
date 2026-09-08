@@ -69,7 +69,7 @@ function AlbumPageInner() {
   const params = useSearchParams();
   const identifier = params.get("id") ?? "";
   const artistSegment = params.get("n");
-  const { playQueue, current, toggle, playing, seek } = usePlayer();
+  const { playQueue, current, toggle, playing } = usePlayer();
   const [album, setAlbum] = useState(null);
   const [error, setError] = useState(null);
   // Map trackId → {artist, title, confidence, level} of canonical metadata.
@@ -250,9 +250,10 @@ function AlbumPageInner() {
                         <button
                           onClick={() => {
                             if (album.restricted) return;
-                            playQueue(album.tracks, i);
-                            // Seek to the sub-work's start offset once loaded.
-                            setTimeout(() => seek(track.compound.starts[k] ?? 0), 900);
+                            // #22: the compound offset travels WITH the load
+                            // (pf.load position / inline metadata-seek) — no
+                            // fire-and-hope setTimeout race.
+                            playQueue(album.tracks, i, { position: track.compound.starts[k] ?? 0 });
                           }}
                           className="flex w-full items-center gap-2 py-1 text-left text-xs text-zinc-400 hover:text-emerald-400"
                         >
@@ -272,7 +273,16 @@ function AlbumPageInner() {
                     {track.alternates.map((alt) => (
                       <li key={alt.id}>
                         <button
-                          onClick={() => { if (album.restricted) return; playQueue([alt], 0); }}
+                          onClick={() => {
+                            if (album.restricted) return;
+                            // #23: alternate takes play WITHIN the album
+                            // queue — the queue is the album flattened with
+                            // its alternates in place, so forward/back keeps
+                            // walking the whole release.
+                            const flat = album.tracks.flatMap((t) => [t, ...(t.alternates ?? [])]);
+                            const idx = flat.findIndex((t) => t.id === alt.id);
+                            playQueue(flat, Math.max(0, idx));
+                          }}
                           className="flex w-full items-center gap-2 py-1 text-left text-xs text-zinc-400 hover:text-emerald-400"
                           title={`Alternate take: ${alt.title}`}
                           data-testid="alternate-row"
