@@ -51,7 +51,14 @@ export default function HomePage() {
       if (popular.length < 12) {
         const seen = new Set(popular.map((a) => a.name.toLowerCase()));
         const stats = await creatorStats("audio_music", 500);
-        const sitelinks = await batchSitelinks(stats.map((s) => s.name));
+        // batchSitelinks caps at 40 titles per request (Wikipedia API limit) →
+        // chunk 40, same contract as lib/catalogwarm.js popularCandidates.
+        const sitelinks = new Map();
+        const statNames = stats.map((s) => s.name);
+        for (let i = 0; i < statNames.length; i += 40) {
+          const part = await batchSitelinks(statNames.slice(i, i + 40));
+          for (const [k, v] of part) sitelinks.set(k, v);
+        }
         const enriched = stats.map((s) => ({ ...s, sitelinks: sitelinks.get(s.name) ?? 0 }));
         const notable = [...enriched].sort((a, b) => b.sitelinks - a.sitelinks).slice(0, 16);
         await Promise.all(notable.map(async (s) => { s.pageviews = await pageviews(s.name); }));
