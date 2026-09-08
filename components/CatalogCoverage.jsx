@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { crossReference, resolveArtistMbid } from "@/lib/discography";
 import { catalogGet, keys } from "@/lib/catalogstore";
+import { warmStats } from "@/lib/catalogwarm";
 
 /**
  * Catalog coverage panel — the inverse process made visible.
@@ -21,6 +22,10 @@ export default function CatalogCoverage({ artist }) {
   const [data, setData] = useState(null);
   const [fill, setFill] = useState(null);
   const [showMissing, setShowMissing] = useState(false);
+  // Warm-up data-quality badge (Fase 3.2): per-source yield of the candidate
+  // streams, accumulated locally (pf.warmstats). Numbers only — the crawl
+  // decision stays with the owner. Hidden until a few units give signal.
+  const warmBadge = warmStats().filter((r) => r.n >= 3);
 
   useEffect(() => {
     let alive = true;
@@ -36,6 +41,10 @@ export default function CatalogCoverage({ artist }) {
 
   if (!data || !data.entries.length) return null;
 
+  // Per-track coverage counts ALTERNATE TAKES as real targets (owner,
+  // ratified): an alternate is its own play target with its own trackKey in
+  // the fill record — counting it is honest coverage of the published
+  // record, NOT padding. No filter is applied (ratified default, low-risk).
   const pct = Math.round(data.coverage * 100);
   const trackCount = fill ? Object.keys(fill.tracks ?? {}).length : 0;
   const filledCount = fill ? Object.values(fill.tracks ?? {}).filter((v) => v?.length).length : 0;
@@ -62,6 +71,11 @@ export default function CatalogCoverage({ artist }) {
         <p className="mt-1 text-xs text-zinc-500" data-testid="track-coverage">
           Track coverage: <span className="text-emerald-400">{filledCount}</span>/{trackCount} tracks with at least one verified link
           {fill.stats?.liveness != null && <> · sampled liveness {Math.round(fill.stats.liveness * 100)}%</>}
+        </p>
+      )}
+      {warmBadge.length > 0 && (
+        <p className="mt-1 text-[11px] text-zinc-600" data-testid="warmstats">
+          Warm-up quality: {warmBadge.map((r) => `${r.source} ${Math.round(r.coverage * 100)}%`).join(" · ")}
         </p>
       )}
 

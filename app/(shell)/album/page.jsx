@@ -8,6 +8,7 @@ import { normalizeAlbum } from "@/lib/pipeline";
 import { canonicalFor, publishIdentification } from "@/lib/canonical";
 import { alignTracklist, resolveReleaseGroup } from "@/lib/tracklist";
 import { loadPolicy, savePolicy, FORMAT_RANK } from "@/lib/formatpolicy";
+import { loadChoices, saveChoice } from "@/lib/versions";
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
 
@@ -54,6 +55,41 @@ function FormatSelector() {
 /** Track title the pipeline considers unreliable → verification candidate. */
 const JUNK_TRACK = /^[*_\-.:\s]*$|^\*+$|^(track|audio|untitled)?\s*\d*$/i;
 const needsVerify = (t) => JUNK_TRACK.test(t.title) || t.title.length < 3;
+
+/**
+ * Per-track VERSION SELECTOR (Fase 3.1): an explicit pick persists in
+ * pf.version.choice (lib/versions.js saveChoice) and always wins over the
+ * aggregate/quality default on the next queue load. If the track is playing,
+ * it reloads with the chosen variant so the switch is audible immediately.
+ * The `title` states the BASIS honestly (your choice / quality tier), never
+ * implies community data where none exists.
+ */
+function VersionSelector({ track, isCurrent, onApply }) {
+  const variants = track.variants ?? [];
+  const choices = loadChoices();
+  const chosen = choices[track.id];
+  const value = chosen ?? track.url ?? "";
+  const basis = chosen ? "your explicit choice (persists on this device)" : "quality tier default — no community data for this track yet";
+  if (variants.length <= 1) return null;
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        saveChoice(track.id, e.target.value);
+        if (isCurrent) onApply();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="hidden sm:inline rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-400"
+      aria-label={`Version of ${track.title}`}
+      title={`Format — ${basis}`}
+      data-testid="version-selector"
+    >
+      {variants.map((v, i) => (
+        <option key={v.url ?? i} value={v.url}>{v.format ?? `variant ${i + 1}`}</option>
+      ))}
+    </select>
+  );
+}
 
 /**
  * Album detail page with streamable tracklist.
@@ -202,9 +238,10 @@ function AlbumPageInner() {
             const isCurrent = current?.id === track.id;
             return (
               <li key={track.id}>
+                <div className="flex items-center">
                 <button
                   onClick={() => { if (album.restricted) return; isCurrent ? toggle() : playQueue(album.tracks, i); }}
-                  className="group flex w-full items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
+                  className="group flex min-w-0 flex-1 items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
                 >
                   <span className={`w-6 text-right text-sm tabular-nums ${isCurrent ? "text-emerald-400" : "text-zinc-600"}`}>
                     <span className="group-hover:hidden">{isCurrent && playing ? "♪" : track.number}</span>
@@ -243,6 +280,14 @@ function AlbumPageInner() {
                     <span className="text-xs tabular-nums text-zinc-500">{fmt(track.duration)}</span>
                   )}
                 </button>
+                {/* Version selector OUTSIDE the row button (interactive
+                    content cannot nest in a button) — Fase 3.1. */}
+                <VersionSelector
+                  track={track}
+                  isCurrent={isCurrent}
+                  onApply={() => playQueue(album.tracks, i)}
+                />
+                </div>
                 {track.compound && (
                   <ul className="mb-1 ml-12 border-l border-zinc-800 pl-3">
                     {track.compound.works.map((work, k) => (
