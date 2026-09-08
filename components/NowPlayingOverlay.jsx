@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "@/components/PlayerProvider";
 import { thumbUrl } from "@/lib/archive";
 import { loadPolicy, savePolicy, label, MODES } from "@/lib/restoration";
@@ -240,6 +240,14 @@ export default function NowPlayingOverlay({ open, onClose }) {
               </li>
             ))}
           </ol>
+          {queue.length > queueWindow && (
+            <button
+              onClick={() => setQueueWindow((w) => w + 100)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 py-2 text-xs font-medium text-zinc-400 hover:text-white"
+            >
+              Show more ({queue.length - queueWindow} remaining)
+            </button>
+          )}
         </section>
       </div>
     </div>

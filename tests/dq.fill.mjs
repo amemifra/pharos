@@ -260,6 +260,19 @@ if (!artists.length) {
   check("queue:done marker with stats", doneOk, Math.min(filled.length, 1));
 }
 
+// — #27 regression guard (pure): the shell queue/index write must merge
+// into the saved pf.queue record WITHOUT clobbering position/playing —
+// otherwise a reload resumes from 0 or silently loses the playing state.
+{
+  const { mergeQueueRecord } = await import("../lib/subscribe.js");
+  const saved = { queue: [{ id: "old" }], index: 0, position: 187, playing: true };
+  const merged = mergeQueueRecord(saved, { queue: [{ id: "new" }, { id: "new2" }], index: 1 });
+  check("pf.queue merge: queue/index updated", merged.queue.length === 2 && merged.index === 1, true, (v, t) => v === t);
+  check("pf.queue merge: position preserved", merged.position === 187, true, (v, t) => v === t);
+  check("pf.queue merge: playing preserved", merged.playing === true, true, (v, t) => v === t);
+  check("pf.queue merge: no saved record → clean shape", mergeQueueRecord(null, { queue: [], index: 0 }).position === undefined, true, (v, t) => v === t);
+}
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) {
   console.log("Below threshold: fix the fill engine or its data; never lower thresholds to pass.");

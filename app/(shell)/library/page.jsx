@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePlayer } from "@/components/PlayerProvider";
 import { thumbUrl } from "@/lib/archive";
+import { detectCulture, setCulture, applyCulturalCanon, CULTURAL_CANON } from "@/lib/culture";
 import AlbumCard from "@/components/AlbumCard";
 import SurfaceState from "@/components/SurfaceState";
 import Icon from "@/components/Icon";
@@ -115,6 +116,45 @@ export default function LibraryPage() {
           </div>
         </section>
       )}
+
+      {/* —— Cultural canon (#30): the explicit choice wins over detection —
+          setCulture was dead code; this small select wires it honestly. */}
+      <CultureSelect />
     </main>
+  );
+}
+
+/**
+ * Cultural-canon selector (#30): the ranking prior (lib/culture.js) follows
+ * the chosen canon; applies immediately (applyCulturalCanon) and persists
+ * (pf.culture). Honest scope: this only re-ORDERS proposals, never invents
+ * artists (anti-hallucination scope in lib/culture.js).
+ */
+function CultureSelect() {
+  const [culture, setLocal] = useState(null);
+  useEffect(() => { setLocal(detectCulture()); }, []);
+  if (!culture) return null;
+  const pick = (c) => {
+    setCulture(c);
+    applyCulturalCanon(c);
+    setLocal(c);
+  };
+  return (
+    <section className="mb-12">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">Cultural canon</h2>
+      <label className="flex items-center gap-3 text-sm text-zinc-400">
+        Weight suggestions by
+        <select
+          value={culture}
+          onChange={(e) => pick(e.target.value)}
+          className="rounded-full bg-zinc-900 border border-zinc-800 px-4 py-2 text-sm text-zinc-300"
+          aria-label="Cultural canon"
+        >
+          {Object.keys(CULTURAL_CANON).map((c) => (
+            <option key={c} value={c}>{c.toUpperCase()}</option>
+          ))}
+        </select>
+      </label>
+    </section>
   );
 }

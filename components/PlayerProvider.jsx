@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import PlayerIsland from "@/components/PlayerIsland";
 import { loadPolicy, chooseVariant, reportStall } from "@/lib/formatpolicy";
+import { mergeQueueRecord } from "@/lib/subscribe";
 
 /**
  * Global player provider — thin proxy over the player island (phase 1).
@@ -240,11 +241,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (!queue.length) return;
     const saved = readLS("pf.queue", null);
-    writeLS("pf.queue", {
-      ...(saved && typeof saved === "object" ? saved : {}),
-      queue,
-      index,
-    });
+    writeLS("pf.queue", mergeQueueRecord(saved, { queue, index }));
   }, [queue, index]);
 
   /** Persist play history for /library (dedup by track id, cap 20). */

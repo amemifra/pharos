@@ -49,7 +49,8 @@ function ArtistPageInner() {
   const fillNow = async () => {
     setFilling(true);
     try {
-      await fillArtist(artist, { force: false });
+      const res = await fillArtist(artist, { force: false });
+      setFillBlock(res?.state === "dq-failed" || res?.state === "nothing-to-fill" ? res : null);
       setFill(await fillState(artist));
     } catch { /* honest failure: button re-enables, state stays pending */ }
     setFilling(false);
@@ -60,6 +61,15 @@ function ArtistPageInner() {
     : fill?.state === "claimed" ? "Claimed by a peer"
     : fill?.state === "pending" ? "Queued"
     : "";
+  // #29: a fill that FAILED the auto-DQ (or had nothing to fill) stays
+  // disabled WITH the reason on the button — never a silently dead button.
+  // The failure result comes from the fillArtist() call itself (the catalog
+  // only records success): kept in component state per artist.
+  const [fillBlock, setFillBlock] = useState(null);
+  useEffect(() => { setFillBlock(null); }, [artist]);
+  const fillBlockReason = fillBlock?.reason
+    ? (fillBlock.state === "dq-failed" ? `Auto-DQ failed: ${fillBlock.reason}` : `Nothing to fill: ${fillBlock.reason}`)
+    : null;
 
   useEffect(() => {
     let alive = true;
@@ -107,7 +117,7 @@ function ArtistPageInner() {
                 <>
                   <span className="text-emerald-400 font-semibold">{cross.available}</span> / {cross.entries.length} canonical albums available
                   {" · "}<span data-testid="coverage">{coveragePct}%</span> coverage
-                  {cross.entries[0]?.year ? ` · from ${Math.min(...cross.entries.map(e => e.year ?? 9999))}` : ""}
+                  {cross.entries[0]?.year ? ` · from ${Math.min(...cross.entries.map(e => e.year).filter(y => Number.isFinite(y) && y > 0))}` : ""}
                 </>
               ) : "…"}
             </p>
@@ -116,11 +126,14 @@ function ArtistPageInner() {
             <div className="mt-3 flex items-center gap-3">
               <button
                 onClick={fillNow}
-                disabled={filling || fill?.state === "filled"}
+                disabled={filling || fill?.state === "filled" || !!fillBlockReason}
+                title={fillBlockReason ?? undefined}
                 data-testid="fill-now"
                 className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
               >
-                {fillLabel || "Fill now"}
+                {filling ? fillLabel
+                  : fillBlock ? (fillBlock.state === "dq-failed" ? "Fill blocked — DQ" : "Nothing to fill")
+                  : fillLabel || "Fill now"}
               </button>
               {fill?.state === "claimed" && (
                 <span className="text-xs text-zinc-500">Another peer is working on this artist — the result will appear here for everyone.</span>
