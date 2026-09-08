@@ -6,3 +6,7 @@ out/
 
 # Handoff/swarm notes: local only, mai nella storia git
 docs/HANDOFF*.md
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursorrules
