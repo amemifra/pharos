@@ -95,5 +95,16 @@ if (sampled > 0) {
   }
 }
 
+// resumeSeconds (#25): persisted progress → honest resume mapping.
+{
+  const { resumeSeconds } = await import("../lib/subscribe.js");
+  check("resumeSeconds: no record → 0", resumeSeconds(null, 3600_000) === 0);
+  check("resumeSeconds: zero progress → 0", resumeSeconds({ progressSec: 0 }, 3600_000) === 0);
+  check("resumeSeconds: mid-episode resumes at progress", resumeSeconds({ progressSec: 600 }, 3600_000) === 600);
+  check("resumeSeconds: ≥95% complete → restart from 0", resumeSeconds({ progressSec: 3500 }, 3600_000) === 0);
+  check("resumeSeconds: ≥95% complete → restart from 0 (past EOF too)", resumeSeconds({ progressSec: 7200 }, 3600_000) === 0);
+  check("resumeSeconds: unknown duration keeps raw progress", resumeSeconds({ progressSec: 120 }, null) === 120);
+}
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) process.exit(1);

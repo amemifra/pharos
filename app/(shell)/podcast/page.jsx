@@ -8,8 +8,13 @@ import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToT
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
 
+const fmtMin = (s) => {
+  const m = Math.floor((Number(s) || 0) / 60);
+  return `${m}:${String(Math.floor((Number(s) || 0) % 60)).padStart(2, "0")}`;
+};
+
 /**
- * Podcast show page (F6) — reverse-chronological episodes, played dots,
+ * Podcast show page (F6)) — reverse-chronological episodes, played dots,
  * subscribe/unsubscribe, "play all unplayed". Data path: epfeed: snapshot
  * (P2P-shared, 36h TTL) → direct RSS with declared CORS-proxy fallback.
  * Refresh is manual only: a button, never background polling.
@@ -182,7 +187,11 @@ function PodcastPageInner() {
           )}
           {data.episodes.map((ep) => {
             const p = played[ep.guid];
-            const isPlayed = !!p?.progressSec;
+            // Played-dot, three honest states (#25): unplayed (empty ring),
+            // partial (progress > 0 — in-progress ring), complete (≥90%).
+            const partial = !!p && (p.progressSec ?? 0) > 0 && !p.complete;
+            const isPlayed = !!p?.complete;
+            const dotState = isPlayed ? "played" : partial ? "partial" : "unplayed";
             const dead = unplayable[ep.guid];
             return (
               <li key={ep.guid}>
@@ -207,7 +216,12 @@ function PodcastPageInner() {
                   }}
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left ${dead ? "opacity-50" : "hover:bg-zinc-800/60"}`}
                 >
-                  <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${isPlayed ? "bg-emerald-500" : "border border-zinc-600"}`} aria-label={isPlayed ? "played" : "unplayed"} />
+                  <span
+                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+                      isPlayed ? "bg-emerald-500" : partial ? "border-2 border-emerald-500/80" : "border border-zinc-600"
+                    }`}
+                    aria-label={dotState}
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{ep.title}</span>
                     <span className="mt-0.5 block text-xs text-zinc-500">
@@ -219,6 +233,7 @@ function PodcastPageInner() {
                         <>
                           {relativeDate(ep.pubDateMs)}
                           {ep.durationMs ? ` · ${Math.round(ep.durationMs / 60000)} min` : ""}
+                          {partial ? ` · in progress ${fmtMin(p.progressSec)}` : ""}
                           {isVideoEnclosure(ep) ? " · video podcast" : ""}
                         </>
                       )}
@@ -235,11 +250,17 @@ function PodcastPageInner() {
   );
 }
 
-/** Marks the episode started and plays it (progress tracked by the player). */
+/**
+ * Marks the episode started and plays it, RESUMING from the saved position
+ * (#25 — the metric is listening TIME: an episode restarts where the listener
+ * actually left it, never from zero). `resumeSeconds` (lib/subscribe.js)
+ * maps the persisted progress onto the episode honestly.
+ */
 async function markPlayedAndPlay(ep, prev, playQueue, track) {
-  const { markPlayed } = await import("@/lib/subscribe");
-  markPlayed(ep.guid, prev?.progressSec ?? 0);
-  playQueue(track, 0);
+  const { markPlayed, resumeSeconds } = await import("@/lib/subscribe");
+  const resumeAt = resumeSeconds(prev, ep.durationMs);
+  markPlayed(ep.guid, resumeAt);
+  playQueue(track, 0, { position: resumeAt });
 }
 
 /**

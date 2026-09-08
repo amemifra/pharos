@@ -77,6 +77,14 @@ export default function PlayerIslandPage() {
       const track = queueRef.current[indexRef.current];
       if (!track) return;
       audio.src = track.url;
+      // #24: re-apply the saved playback rate on EVERY track load (podcast
+      // per-show pf.speed:<feedUrl>, else the last chosen pf.speed:last —
+      // the same contract SpeedControl reads/writes).
+      try {
+        const key = track.feedUrl ? `pf.speed:${track.feedUrl}` : "pf.speed:last";
+        const rate = Number(JSON.parse(localStorage.getItem(key) ?? "1")) || 1;
+        audio.playbackRate = Math.min(2, Math.max(0.5, rate));
+      } catch {}
       audio.play().catch(() => {});
     };
 
