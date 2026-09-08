@@ -52,7 +52,7 @@ function PodcastPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedUrl]);
 
-  const tracks = useMemo(() => (data ? episodesToTracks(data.episodes) : []), [data]);
+  const tracks = useMemo(() => (data ? episodesToTracks(data.episodes, data.show?.image ?? null) : []), [data]);
   const firstUnplayed = useMemo(() => {
     if (!data) return 0;
     const i = data.episodes.findIndex((ep) => !played[ep.guid]);
@@ -163,7 +163,7 @@ function PodcastPageInner() {
               <li key={ep.guid}>
                 <button
                   onClick={() => {
-                    const t = episodesToTracks([ep]);
+                    const t = episodesToTracks([ep], data?.show?.image ?? null);
                     markPlayedAndPlay(ep, p, playQueue, t);
                   }}
                   className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-zinc-800/60"

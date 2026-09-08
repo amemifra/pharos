@@ -219,6 +219,7 @@ export function PlayerProvider({ children }) {
       // as archive.org AlbumCards (guid ≠ item/fileName): carry the medium.
       medium: track.medium === "podcast" ? "podcast" : "music",
       feedUrl: track.feedUrl ?? null,
+      cover: track.cover ?? null,
       video: !!track.video,
     };
     writeLS("pf.recent", [entry, ...prev.filter((e) => e.id !== entry.id)].slice(0, 20));
@@ -226,12 +227,13 @@ export function PlayerProvider({ children }) {
 
   const current = index >= 0 ? queue[index] ?? null : null;
 
-  // Video podcast view (owner): a video track pops the island <video> in as
-  // a mini player by default; audio-only always hides it. setVideoView is
-  // exposed so NowPlayingBar can cycle pip ↔ full.
+  // Video podcast view (owner): NEVER auto-opens (many audio-only feeds are
+  // mislabeled video/mp4 — the black full-screen of a false positive is
+  // worse than a tap). The view exists only when the user opens it from the
+  // NowPlayingBar and auto-hides when the current track is not video.
   const [videoView, setVideoView] = useState("hidden");
   useEffect(() => {
-    setVideoView((v) => (current?.video ? (v === "hidden" ? "pip" : v) : "hidden"));
+    setVideoView((v) => (current?.video ? v : "hidden"));
   }, [current?.video]);
 
   /**
@@ -347,7 +349,14 @@ export function PlayerProvider({ children }) {
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      {mode !== "inline" && <PlayerIsland onMessage={onIslandMessage} islandRef={islandRef} videoView={videoView} />}
+      {mode !== "inline" && (
+        <PlayerIsland
+          onMessage={onIslandMessage}
+          islandRef={islandRef}
+          videoView={videoView}
+          onCollapse={() => setVideoView("hidden")}
+        />
+      )}
       {mode === "inline" && (
         <audio
           ref={inlineAudioRef}

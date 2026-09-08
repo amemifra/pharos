@@ -114,8 +114,13 @@ export default function HomePage() {
           <div className="shelf-scroll flex gap-5 overflow-x-auto pb-3 -mx-4 px-4 md:-mx-8 md:px-8">
             {recentPodcasts.map((e) => (
               <Link key={e.feedUrl} href={`/podcast?url=${encodeURIComponent(e.feedUrl)}`} className="w-40 sm:w-44 shrink-0">
-                <div className="flex h-40 w-40 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900">
-                  <Icon name="podcast" className="h-10 w-10 text-zinc-500" />
+                <div className="flex h-40 w-40 items-center justify-center overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                  {e.cover ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={e.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ) : (
+                    <Icon name="podcast" className="h-10 w-10 text-zinc-500" />
+                  )}
                 </div>
                 <p className="mt-2 truncate text-sm font-medium">{e.title}</p>
                 <p className="truncate text-xs text-zinc-500">{e.video ? "video podcast" : "podcast"}{e.artist ? ` · ${hostOf(e.artist)}` : ""}</p>
