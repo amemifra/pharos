@@ -226,6 +226,14 @@ export function PlayerProvider({ children }) {
 
   const current = index >= 0 ? queue[index] ?? null : null;
 
+  // Video podcast view (owner): a video track pops the island <video> in as
+  // a mini player by default; audio-only always hides it. setVideoView is
+  // exposed so NowPlayingBar can cycle pip ↔ full.
+  const [videoView, setVideoView] = useState("hidden");
+  useEffect(() => {
+    setVideoView((v) => (current?.video ? (v === "hidden" ? "pip" : v) : "hidden"));
+  }, [current?.video]);
+
   /**
    * Load a queue and start playback. Same contract as the pre-island API.
    * @param {Track[]} tracks
@@ -330,12 +338,16 @@ export function PlayerProvider({ children }) {
     playQueue, toggle, skip, seek, jumpTo, setSpeed,
     hasNext: index < queue.length - 1,
     hasPrev: index > 0,
+    // Video podcast view (owner): "hidden" | "pip" | "full" — the island
+    // iframe carries the actual <video>; NowPlayingBar toggles it.
+    videoView,
+    setVideoView,
   };
 
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      {mode !== "inline" && <PlayerIsland onMessage={onIslandMessage} islandRef={islandRef} />}
+      {mode !== "inline" && <PlayerIsland onMessage={onIslandMessage} islandRef={islandRef} videoView={videoView} />}
       {mode === "inline" && (
         <audio
           ref={inlineAudioRef}

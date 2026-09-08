@@ -20,7 +20,7 @@ const fmt = (s) => {
  * route changes; positioned above the mobile bottom-nav.
  */
 export default function NowPlayingBar() {
-  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index } = usePlayer();
+  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, videoView, setVideoView } = usePlayer();
   // Full-screen overlay state (spec Phase 3). Overlay ≠ route: the audio
   // island is untouched by open/close.
   const [expanded, setExpanded] = useState(false);
@@ -56,12 +56,25 @@ export default function NowPlayingBar() {
         aria-label="Track progress"
       />
       <div className="flex h-16 items-center gap-3 px-3 md:px-4">
-        {/* mini cover — archive.org thumbnail; podcasts get their own icon
-            (a guid is not an item id: thumbUrl would 404, icon per owner) */}
-        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800">
-          {current.medium === "podcast" ? (
+        {/* mini cover / VIDEO preview toggle (owner: the video IS the
+            preview — tap cycles mini player ↔ full page) */}
+        <button
+          type="button"
+          onClick={() => setVideoView((v) => (v === "full" ? "pip" : "full"))}
+          title={videoView === "full" ? "Back to mini video" : "Expand video"}
+          aria-label={videoView === "full" ? "Shrink video to mini player" : "Expand video to full page"}
+          className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800"
+        >
+          {current.medium === "podcast" && !current.video ? (
             <span className="flex h-full w-full items-center justify-center text-zinc-500">
               <Icon name="podcast" className="h-6 w-6" />
+            </span>
+          ) : current.video ? (
+            <span className="flex h-full w-full items-center justify-center gap-0.5 bg-zinc-900 text-zinc-300">
+              <Icon name="podcast" className="h-4 w-4" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-3.5 w-3.5">
+                <path d="M14 4h6v6M20 4l-6 6M10 20H4v-6M4 20l6-6" />
+              </svg>
             </span>
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -72,7 +85,7 @@ export default function NowPlayingBar() {
               onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
           )}
-        </div>
+        </button>
 
         {/* title/artist — tap opens the full-screen Now Playing overlay */}
         <button
@@ -84,7 +97,7 @@ export default function NowPlayingBar() {
           <p className="truncate text-xs text-zinc-500">
             {fmt(progress)} / {fmt(duration)}
             {current.medium === "podcast" && " · podcast"}
-            {current.video && " · video track (audio playback)"}
+            {current.video && (videoView === "full" ? " · video (full page)" : " · video (mini player) — tap ⤢ for full page")}
           </p>
         </button>
 
