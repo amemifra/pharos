@@ -1,5 +1,84 @@
 @import "tailwindcss";
 
+/*
+ * P0-DESIGN — ink / ivory / brass palette (owner-requested).
+ *
+ * The named tokens below are the design vocabulary (use these in NEW code);
+ * the zinc/emerald remaps beneath them retarget the EXISTING utilities
+ * (~40 files use zinc-* surfaces and emerald-* accents) so the whole app
+ * restyles systematically, without a component-churn rewrite:
+ *   zinc-950/900/800 → ink surfaces (#121110 / #1a1816 / #201d19 card)
+ *   zinc-700         → ink borders #332f28
+ *   zinc-400..100    → ivory text scale (#b8b0a3 secondary → #efe9dd primary)
+ *   emerald-*        → brass accent (#d9a441, hover #e8bd6d)
+ * Contrast (AA ≥ 4.5:1) holds for primary text: ivory #efe9dd on ink #1a1816
+ * ≈ 12.4:1; secondary ivory #b8b0a3 on ink ≈ 8:1; brass #d9a441 on ink ≈ 7:1.
+ */
+@theme {
+  /* named vocabulary */
+  --color-ink-950: #121110;
+  --color-ink-900: #1a1816;
+  --color-ink-800: #201d19;
+  --color-ink-700: #332f28;
+  --color-ivory-100: #efe9dd;
+  --color-ivory-200: #e5ded1;
+  --color-ivory-300: #cfc8ba;
+  --color-ivory-400: #b8b0a3;
+  --color-ivory-500: #8f877a;
+  --color-brass-200: #f0d49a;
+  --color-brass-300: #e8bd6d;
+  --color-brass-400: #d9a441;
+  --color-brass-500: #c2912f;
+  --color-brass-600: #a37a24;
+  --color-brass-700: #7c5c1c;
+  --color-brass-900: #4a370f;
+
+  /* legacy utility remaps (see note above) */
+  --color-zinc-950: #121110;
+  --color-zinc-900: #1a1816;
+  --color-zinc-800: #201d19;
+  --color-zinc-700: #332f28;
+  --color-zinc-600: #6b6457;
+  --color-zinc-500: #8f877a;
+  --color-zinc-400: #b8b0a3;
+  --color-zinc-300: #cfc8ba;
+  --color-zinc-200: #e5ded1;
+  --color-zinc-100: #efe9dd;
+
+  --color-emerald-200: #f0d49a;
+  --color-emerald-300: #e8bd6d;
+  --color-emerald-400: #d9a441;
+  --color-emerald-500: #d9a441;
+  --color-emerald-600: #c2912f;
+  --color-emerald-700: #a37a24;
+  --color-emerald-800: #7c5c1c;
+  --color-emerald-900: #4a370f;
+  --color-emerald-950: #33270b;
+}
+
+/* —— Splash intro (P0-DESIGN): staged fade, skip on tap, OFF on
+   prefers-reduced-motion (the overlay itself is motion-reduce:hidden) —— */
+@keyframes splash-rise {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.splash-mark {
+  opacity: 0;
+  animation: splash-rise 0.7s ease-out 0.15s forwards;
+  box-shadow: 0 0 48px 6px rgb(217 164 65 / 0.25); /* soft brass glow */
+}
+.splash-title {
+  opacity: 0;
+  animation: splash-rise 0.6s ease-out 0.7s forwards;
+}
+.splash-sub {
+  opacity: 0;
+  animation: splash-rise 0.6s ease-out 1.3s forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-mark, .splash-title, .splash-sub { animation: none; opacity: 1; transform: none; }
+}
+
 /* —— Focus accessibile —— */
 :focus-visible {
   outline: 2px solid var(--color-emerald-500);

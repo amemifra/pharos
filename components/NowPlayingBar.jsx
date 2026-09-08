@@ -6,6 +6,7 @@ import { cachedShowInfo } from "@/lib/podcast";
 import { thumbUrl } from "@/lib/archive";
 import Icon from "@/components/Icon";
 import NowPlayingOverlay from "@/components/NowPlayingOverlay";
+import Manifesto from "@/components/Manifesto";
 
 /** Formats seconds as m:ss; non-finite input → "0:00". */
 const fmt = (s) => {
@@ -135,6 +136,9 @@ export default function NowPlayingBar() {
             )}
           </p>
         </button>
+
+        {/* Manifesto ⓘ (P0-DESIGN): the promise stated where people listen */}
+        <Manifesto align="right" />
 
         {/* controls */}
         <div className="flex items-center gap-1.5">
