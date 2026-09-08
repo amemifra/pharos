@@ -8,6 +8,7 @@ import { startWarmup } from "@/lib/catalogwarm";
 import { applyCulturalCanon } from "@/lib/culture";
 import Icon from "@/components/Icon";
 import PharosMark from "@/components/PharosMark";
+import FeedbackDialog from "@/components/FeedbackDialog";
 
 const NAV = [
   { href: "/", icon: "home", label: "Home" },
@@ -69,6 +70,10 @@ export default function AppShell({ children }) {
   /** Active = exact match (tabs are distinct routes, no anchors). */
   const isActive = (href) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
+  // Community feedback dialog (owner request): in-app bug reports +
+  // suggestions, stored locally + on the P2P catalog (lib/userfeedback.js).
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
   return (
     <div className="min-h-screen">
       {/* Desktop sidebar */}
@@ -115,6 +120,15 @@ export default function AppShell({ children }) {
           </nav>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          className="mt-8 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white"
+        >
+          <Icon name="note" className="h-5 w-5" />
+          Report an issue
+        </button>
+
         <p className="mt-auto px-3 text-[11px] leading-relaxed text-zinc-700">
           A lighthouse for public culture · archive.org + open sources · zero servers
           {warm.done > 0 && (
@@ -145,6 +159,8 @@ export default function AppShell({ children }) {
           </Link>
         ))}
       </nav>
+
+      <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} page={pathname} />
     </div>
   );
 }
