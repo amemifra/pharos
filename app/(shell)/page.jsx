@@ -75,8 +75,15 @@ export default function HomePage() {
     try { setRecent(JSON.parse(localStorage.getItem("pf.recent") ?? "[]")); } catch {}
   }, []);
 
-  /** Unique albums from history, newest first. */
-  const recentAlbums = [...new Map(recent.map((e) => [e.albumId, e])).values()].slice(0, 10);
+  /** Podcasts count as listening too (owner) — but they are not archive.org
+   *  albums: they render as their own row with the podcast icon, linking to
+   *  the show page via /podcast?url=<feedUrl>. Legacy entries (no medium)
+   *  default to music. */
+  const music = recent.filter((e) => (e.medium ?? "music") === "music");
+  const podcasts = recent.filter((e) => e.medium === "podcast" && e.feedUrl);
+  const recentAlbums = [...new Map(music.map((e) => [e.albumId, e])).values()].slice(0, 10);
+  const recentPodcasts = [...new Map(podcasts.map((e) => [e.feedUrl, e])).values()].slice(0, 10);
+  const hostOf = (u) => { try { return new URL(u).hostname; } catch { return ""; } };
 
   return (
     <main className="mx-auto max-w-6xl px-4 md:px-8 pt-6 md:pt-10">
@@ -100,6 +107,23 @@ export default function HomePage() {
       </header>
 
       {/* Recently played (pattern #12: history as a first-class row) */}
+      {/* Recently played — podcasts first-class (owner: “valgono come musica”) */}
+      {recentPodcasts.length > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-4 text-xl font-bold tracking-tight">Recently played podcasts</h2>
+          <div className="shelf-scroll flex gap-5 overflow-x-auto pb-3 -mx-4 px-4 md:-mx-8 md:px-8">
+            {recentPodcasts.map((e) => (
+              <Link key={e.feedUrl} href={`/podcast?url=${encodeURIComponent(e.feedUrl)}`} className="w-40 sm:w-44 shrink-0">
+                <div className="flex h-40 w-40 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900">
+                  <Icon name="podcast" className="h-10 w-10 text-zinc-500" />
+                </div>
+                <p className="mt-2 truncate text-sm font-medium">{e.title}</p>
+                <p className="truncate text-xs text-zinc-500">{e.video ? "video podcast" : "podcast"}{e.artist ? ` · ${hostOf(e.artist)}` : ""}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       {recentAlbums.length > 0 && (
         <section className="mb-10">
           <h2 className="mb-4 text-xl font-bold tracking-tight">Recently played</h2>

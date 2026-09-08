@@ -215,6 +215,11 @@ export function PlayerProvider({ children }) {
       artist: track.artist ?? track.__albumArtist ?? "",
       albumId: track.id.split("/")[0],
       at: Date.now(),
+      // Podcasts count as listening activity (owner) but must NOT be rendered
+      // as archive.org AlbumCards (guid ≠ item/fileName): carry the medium.
+      medium: track.medium === "podcast" ? "podcast" : "music",
+      feedUrl: track.feedUrl ?? null,
+      video: !!track.video,
     };
     writeLS("pf.recent", [entry, ...prev.filter((e) => e.id !== entry.id)].slice(0, 20));
   }, []);
