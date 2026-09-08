@@ -28,7 +28,8 @@ import SkeletonCard from "@/components/SkeletonCard";
  */
 function ArtistPageInner() {
   const params = useSearchParams();
-  const artist = params.get("n") ? decodeURIComponent(params.get("n")) : "";
+  // useSearchParams already decodes query values — double-decoding crashes on names containing "%".
+  const artist = params.get("n") ?? "";
   const [cross, setCross] = useState(null);
   const [image, setImage] = useState(null);
   const [rawItems, setRawItems] = useState(null);

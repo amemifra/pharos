@@ -21,7 +21,7 @@ const fmt = (s) => {
  * route changes; positioned above the mobile bottom-nav.
  */
 export default function NowPlayingBar() {
-  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, videoView, setVideoView } = usePlayer();
+  const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, videoView, setVideoView, trackError } = usePlayer();
   // Full-screen overlay state (spec Phase 3). Overlay ≠ route: the audio
   // island is untouched by open/close.
   const [expanded, setExpanded] = useState(false);
@@ -124,9 +124,15 @@ export default function NowPlayingBar() {
         >
           <p className="truncate text-sm font-semibold">{current.title}</p>
           <p className="truncate text-xs text-zinc-500">
-            {fmt(progress)} / {fmt(duration)}
-            {current.medium === "podcast" && " · podcast"}
-            {current.video && (videoView === "full" ? " · video (full page)" : " · video player available (⤢)")}
+            {trackError === current.id ? (
+              <span className="text-red-400" role="status">couldn't load this file — skipped</span>
+            ) : (
+              <>
+                {fmt(progress)} / {fmt(duration)}
+                {current.medium === "podcast" && " · podcast"}
+                {current.video && (videoView === "full" ? " · video (full page)" : " · video player available (⤢)")}
+              </>
+            )}
           </p>
         </button>
 

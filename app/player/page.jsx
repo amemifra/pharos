@@ -254,12 +254,29 @@ export default function PlayerIslandPage() {
     let stallCount = 0;
     const onWaiting = () => { stallStart = Date.now(); };
     const onPlayingAfterStall = () => {
+      errorRun = 0; // audible playback: the consecutive-error run is over
       if (!stallStart) return;
       const waited = Date.now() - stallStart;
       stallStart = 0;
       if (waited > 2000 && ++stallCount >= 2) {
         stallCount = 0;
         try { window.parent.postMessage({ type: "pf.stall", waitedMs: waited }, "*"); } catch {}
+      }
+    };
+
+    /** Dead URL (restricted 401, empty enclosure): never freeze the player.
+     *  Auto-skip to the next track (bounded by consecutive-error counter) and
+     *  tell the shell so NowPlayingBar can show an honest message. */
+    let errorRun = 0;
+    const onAudioError = () => {
+      errorRun++;
+      const t = queueRef.current[indexRef.current];
+      try { window.parent.postMessage({ type: "pf.trackerror", id: t?.id, url: t?.url }, "*"); } catch {}
+      const next = indexRef.current + 1;
+      if (errorRun < queueRef.current.length && next < queueRef.current.length) {
+        indexRef.current = next;
+        persist();
+        loadAndPlay();
       }
     };
 
@@ -272,6 +289,7 @@ export default function PlayerIslandPage() {
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("waiting", onWaiting);
     audio.addEventListener("playing", onPlayingAfterStall);
+    audio.addEventListener("error", onAudioError);
 
     // Handshake: declare what is already loaded (if the island survived a
     // shell reload while playing, the shell must NOT re-send pf.load — that
