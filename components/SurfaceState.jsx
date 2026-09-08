@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import Icon from "@/components/Icon";
 
 /**
@@ -49,12 +50,13 @@ export default function SurfaceState({ state, title, hint, emptyAction, onRetry,
       <p className="mt-3 text-sm text-zinc-400">{title ?? "Nothing here yet."}</p>
       {hint && <p className="mt-1 text-xs text-zinc-500">{hint}</p>}
       {emptyAction && (
-        <a
+        // next/link, never raw <a>: raw hrefs 404 under the /pharos basePath.
+        <Link
           href={emptyAction.href}
           className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-black hover:bg-emerald-400 transition-colors"
         >
           {emptyAction.label}
-        </a>
+        </Link>
       )}
     </div>
   );

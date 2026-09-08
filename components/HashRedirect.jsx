@@ -19,7 +19,12 @@ export default function HashRedirect() {
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash.startsWith("#/")) return;
-    const parts = hash.slice(2).split("/").map(decodeURIComponent);
+    let parts;
+    try {
+      parts = hash.slice(2).split("/").map(decodeURIComponent);
+    } catch {
+      return; // malformed % sequence in a legacy deep link — drop it, never crash the shell
+    }
     if (parts[0] === "artist" && parts[1]) {
       if (parts[2] === "album" && parts[3]) {
         router.replace(`/album?id=${encodeURIComponent(parts[3])}&n=${encodeURIComponent(parts[1])}`);

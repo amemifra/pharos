@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 const KEY = "pf.recentsearches";
 const MAX = 10;
 
@@ -24,7 +26,12 @@ export function pushRecentSearch(query) {
  * @param {{onPick: (query: string) => void}} props
  */
 export default function RecentSearches({ onPick }) {
-  const items = typeof window !== "undefined" ? readRecentSearches() : [];
+  // Read in useEffect + state, NEVER in render: a localStorage read during
+  // render diverges from the server HTML → hydration mismatch (difetto #10).
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    setItems(readRecentSearches());
+  }, []);
   if (!items.length) return null;
 
   return (

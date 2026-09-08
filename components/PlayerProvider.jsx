@@ -95,18 +95,25 @@ export function PlayerProvider({ children }) {
         // Re-send the queue ONLY if the island is not already on our current
         // track (shell full-reload case: island kept playing — do not restart).
         // When we DO re-send, carry the session resume (position + play state).
+        // NOTE: `post` here is the stale closure captured while mode==="pending"
+        // (it early-returns), so we postMessage directly via the island ref.
         {
           const saved = readLS("pf.queue", null);
           if (saved?.queue?.length) {
             const shellCurrent = saved.queue[saved.index ?? 0]?.id ?? null;
             if (msg.trackId !== shellCurrent) {
-              post({
-                type: "pf.load",
-                tracks: saved.queue,
-                index: saved.index ?? 0,
-                position: Number(saved.position) || 0,
-                play: !!saved.playing,
-              });
+              try {
+                islandRef.current?.contentWindow?.postMessage(
+                  {
+                    type: "pf.load",
+                    tracks: saved.queue,
+                    index: saved.index ?? 0,
+                    position: Number(saved.position) || 0,
+                    play: !!saved.playing,
+                  },
+                  "*",
+                );
+              } catch {}
             }
           }
         }
@@ -148,6 +155,11 @@ export function PlayerProvider({ children }) {
         // next queue load plays lower-rank variants (documented decision table
         // in lib/formatpolicy.js).
         reportStall();
+        break;
+      case "pf.trackerror":
+        // Island audio `error` (dead URL): island already auto-skipped; here
+        // we only surface honest feedback in the UI.
+        if (msg.id) setTrackError(msg.id);
         break;
     }
   }, [post]);
@@ -248,6 +260,11 @@ export function PlayerProvider({ children }) {
     setVideoView((v) => (current?.video ? v : "hidden"));
   }, [current?.video]);
 
+  // Track load failure (dead URL: restricted 401, empty enclosure). Honest
+  // feedback instead of a frozen player; keyed by track id so NowPlayingBar
+  // shows it only while the failed track is still current.
+  const [trackError, setTrackError] = useState(null);
+
   /**
    * Load a queue and start playback. Same contract as the pre-island API.
    * @param {Track[]} tracks
@@ -265,6 +282,7 @@ export function PlayerProvider({ children }) {
     const i = Math.max(0, Math.min(startIndex, q.length - 1));
     setQueue(q);
     setIndex(i);
+    setTrackError(null); // new selection: previous load failure is stale
     rememberRecent(q[i]);
     completedRef.current = new Set();
     queueRef.current = q;
@@ -339,6 +357,7 @@ export function PlayerProvider({ children }) {
   const jumpTo = useCallback((i) => {
     if (i < 0 || i >= queue.length) return;
     setIndex(i);
+    setTrackError(null);
     rememberRecent(queue[i]);
     if (mode === "island") post({ type: "pf.load", tracks: queue, index: i });
     else if (mode === "inline" && inlineAudioRef.current && queue[i]) {
@@ -356,6 +375,8 @@ export function PlayerProvider({ children }) {
     // iframe carries the actual <video>; NowPlayingBar toggles it.
     videoView,
     setVideoView,
+    // Track load failure (id of the failed track, or null) — honest feedback.
+    trackError,
   };
 
   return (
@@ -381,6 +402,13 @@ export function PlayerProvider({ children }) {
           onPause={() => setPlaying(false)}
           onEnded={() => {
             if (index < queue.length - 1) skip(1);
+          }}
+          onError={() => {
+            // Dead URL in inline fallback mode: bounded auto-skip, honest state.
+            const failed = queue[index]?.id;
+            if (failed) setTrackError(failed);
+            if (index < queue.length - 1) skip(1);
+            else setPlaying(false);
           }}
         />
       )}

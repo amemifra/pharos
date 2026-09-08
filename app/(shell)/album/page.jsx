@@ -174,13 +174,21 @@ function AlbumPageInner() {
               {album.year ? ` · ${album.year}` : ""} · {album.tracks.length} tracks
             </p>
             <div className="mt-4 flex items-center gap-3">
-              <button
-                onClick={() => playQueue(album.tracks, 0)}
-                className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-bold text-black transition-all hover:bg-emerald-400 hover:scale-105"
-              >
-                <Icon name={isCurrentAlbum && playing ? "pause" : "play"} className="h-4 w-4" />
-                Play
-              </button>
+              {/* Access guard (same as AlbumCard): lending/login-restricted items
+                  401 on download — never queue them, say WHY instead. */}
+              {album.restricted ? (
+                <span className="inline-flex items-center gap-2 rounded-full bg-zinc-800 px-6 py-2.5 text-sm font-bold text-zinc-400">
+                  🔒 unavailable — lending-restricted on archive.org
+                </span>
+              ) : (
+                <button
+                  onClick={() => playQueue(album.tracks, 0)}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-bold text-black transition-all hover:bg-emerald-400 hover:scale-105"
+                >
+                  <Icon name={isCurrentAlbum && playing ? "pause" : "play"} className="h-4 w-4" />
+                  Play
+                </button>
+              )}
               <FormatSelector />
             </div>
           </div>
@@ -195,7 +203,7 @@ function AlbumPageInner() {
             return (
               <li key={track.id}>
                 <button
-                  onClick={() => (isCurrent ? toggle() : playQueue(album.tracks, i))}
+                  onClick={() => { if (album.restricted) return; isCurrent ? toggle() : playQueue(album.tracks, i); }}
                   className="group flex w-full items-center gap-4 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-900/70"
                 >
                   <span className={`w-6 text-right text-sm tabular-nums ${isCurrent ? "text-emerald-400" : "text-zinc-600"}`}>
@@ -241,6 +249,7 @@ function AlbumPageInner() {
                       <li key={k}>
                         <button
                           onClick={() => {
+                            if (album.restricted) return;
                             playQueue(album.tracks, i);
                             // Seek to the sub-work's start offset once loaded.
                             setTimeout(() => seek(track.compound.starts[k] ?? 0), 900);
@@ -263,7 +272,7 @@ function AlbumPageInner() {
                     {track.alternates.map((alt) => (
                       <li key={alt.id}>
                         <button
-                          onClick={() => playQueue([alt], 0)}
+                          onClick={() => { if (album.restricted) return; playQueue([alt], 0); }}
                           className="flex w-full items-center gap-2 py-1 text-left text-xs text-zinc-400 hover:text-emerald-400"
                           title={`Alternate take: ${alt.title}`}
                           data-testid="alternate-row"
