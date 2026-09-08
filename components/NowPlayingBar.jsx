@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlayer } from "@/components/PlayerProvider";
+import { cachedShowInfo } from "@/lib/podcast";
 import { thumbUrl } from "@/lib/archive";
 import Icon from "@/components/Icon";
 import NowPlayingOverlay from "@/components/NowPlayingOverlay";
@@ -24,6 +25,19 @@ export default function NowPlayingBar() {
   // Full-screen overlay state (spec Phase 3). Overlay ≠ route: the audio
   // island is untouched by open/close.
   const [expanded, setExpanded] = useState(false);
+  // Podcast cover (hooks MUST sit above the `if (!current)` early return):
+  // track.cover first, else the CATALOG-CACHED show record (cachedShowInfo
+  // reads the shared pf.*/OrbitDB layer — never the network, owner:
+  // refetches are where CORS flakes come from). Fallback: mic icon.
+  const [podCover, setPodCover] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setPodCover(null);
+    if (current?.medium === "podcast" && !current?.cover && current?.feedUrl) {
+      cachedShowInfo(current.feedUrl).then((s) => { if (alive) setPodCover(s?.image ?? null); });
+    }
+    return () => { alive = false; };
+  }, [current?.id, current?.medium, current?.cover, current?.feedUrl]);
 
   // Above the bottom-nav on mobile (h-14); on desktop it starts where the
   // sidebar (w-60) ends — the sidebar must never cover the player (Spotify-like).
@@ -40,6 +54,7 @@ export default function NowPlayingBar() {
 
   // Track id = "{identifier}/{fileName}" → mini-cover from the thumbnail service.
   const albumId = current.id.split("/")[0];
+  const coverSrc = current.medium === "podcast" ? (current.cover ?? podCover) : null;
   const fill = duration ? Math.min(100, (progress / duration) * 100) : 0;
 
   return (
@@ -60,21 +75,35 @@ export default function NowPlayingBar() {
             preview — tap cycles mini player ↔ full page) */}
         <button
           type="button"
-          onClick={() => setVideoView((v) => (v === "full" ? "pip" : "full"))}
-          title={videoView === "full" ? "Back to mini video" : "Expand video"}
-          aria-label={videoView === "full" ? "Shrink video to mini player" : "Expand video to full page"}
+          onClick={() => current.video && setVideoView((v) => (v === "full" ? "pip" : "full"))}
+          disabled={!current.video}
+          title={current.video ? (videoView === "full" ? "Back to mini video" : "Expand video") : current.medium === "podcast" ? "Podcast episode" : "Album"}
+          aria-label={current.video ? (videoView === "full" ? "Shrink video to mini player" : "Expand video to full page") : "Track artwork"}
           className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800"
         >
-          {current.medium === "podcast" && !current.video ? (
-            <span className="flex h-full w-full items-center justify-center text-zinc-500">
-              <Icon name="podcast" className="h-6 w-6" />
-            </span>
+          {coverSrc ? (
+            <>
+              <span className="flex h-full w-full items-center justify-center text-zinc-500">
+                <Icon name="podcast" className="h-5 w-5" />
+              </span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={coverSrc}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            </>
           ) : current.video ? (
             <span className="flex h-full w-full items-center justify-center gap-0.5 bg-zinc-900 text-zinc-300">
               <Icon name="podcast" className="h-4 w-4" />
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-3.5 w-3.5">
                 <path d="M14 4h6v6M20 4l-6 6M10 20H4v-6M4 20l6-6" />
               </svg>
+            </span>
+          ) : current.medium === "podcast" ? (
+            <span className="flex h-full w-full items-center justify-center text-zinc-500">
+              <Icon name="podcast" className="h-6 w-6" />
             </span>
           ) : (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -97,7 +126,7 @@ export default function NowPlayingBar() {
           <p className="truncate text-xs text-zinc-500">
             {fmt(progress)} / {fmt(duration)}
             {current.medium === "podcast" && " · podcast"}
-            {current.video && (videoView === "full" ? " · video (full page)" : " · video (mini player) — tap ⤢ for full page")}
+            {current.video && (videoView === "full" ? " · video (full page)" : " · video player available (⤢)")}
           </p>
         </button>
 

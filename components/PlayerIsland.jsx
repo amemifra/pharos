@@ -20,7 +20,7 @@ import { assetPath } from "@/lib/basepath";
  *   onMessage: called for every validated pf.* message from the island.
  *   islandRef: ref to the iframe element (the shell posts into contentWindow).
  */
-export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden" }) {
+export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden", onCollapse }) {
   const handlerRef = useRef(onMessage);
   handlerRef.current = onMessage;
 
@@ -38,6 +38,14 @@ export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden
   // View states for VIDEO podcasts (owner): hidden = 0×0 as before; pip =
   // floating mini video; full = full-page (plus native fullscreen via the
   // iframe allow attribute). Audio-only tracks never leave "hidden".
+  // Esc always collapses the video view (owner: "non posso uscire").
+  useEffect(() => {
+    if (videoView === "hidden") return;
+    const onKey = (e) => { if (e.key === "Escape") onCollapse?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [videoView, onCollapse]);
+
   const frameClass =
     videoView === "pip"
       ? "fixed bottom-20 right-4 z-50 h-44 w-80 overflow-hidden rounded-lg border border-zinc-700 bg-black shadow-2xl md:bottom-20"
@@ -46,15 +54,34 @@ export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden
         : "hidden h-0 w-0 border-0";
 
   return (
-    <iframe
-      ref={islandRef}
-      src={assetPath("/player/")}
-      title="Pharos player island"
-      sandbox="allow-scripts allow-same-origin"
-      allow="fullscreen"
-      className={frameClass}
-      aria-hidden={videoView === "hidden"}
-      tabIndex={videoView === "hidden" ? -1 : 0}
-    />
+    <>
+      <iframe
+        ref={islandRef}
+        src={assetPath("/player/")}
+        title="Pharos player island"
+        sandbox="allow-scripts allow-same-origin"
+        allow="fullscreen"
+        className={frameClass}
+        aria-hidden={videoView === "hidden"}
+        tabIndex={videoView === "hidden" ? -1 : 0}
+      />
+      {videoView !== "hidden" && (
+        <button
+          type="button"
+          onClick={onCollapse}
+          aria-label="Close video player"
+          title={videoView === "full" ? "Close full player (Esc)" : "Close mini player"}
+          className={
+            videoView === "full"
+              ? "fixed right-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-200 hover:bg-zinc-800"
+              : "fixed bottom-[15.3rem] right-4 z-[60] flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800"
+          }
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
+            <path d="m5 5 14 14M19 5 5 19" />
+          </svg>
+        </button>
+      )}
+    </>
   );
 }
