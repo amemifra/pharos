@@ -93,6 +93,17 @@ for (const album of samples.filter(minQuality(3))) {
 check("track title validity (%)", pct(trackOk, Math.max(trackTotal, 1)), 70);
 check("albums with non-empty tracklist", albumsTested, 2);
 
+// — Community feedback (lib/userfeedback) — pure pieces —
+{
+  const { contentHash } = await import("../lib/userfeedback.js");
+  const a = { type: "bug", page: "/search", title: "Search ignores genre", body: "Steps: 1..." };
+  const b = { type: "bug", page: "/search", title: "  search   IGNORES genre ", body: "steps: 1...\n\n" };
+  const c = { type: "suggestion", page: "/search", title: "Search ignores genre", body: "Steps: 1..." };
+  check("feedback contentHash: normalized duplicates share hash", contentHash(a) === contentHash(b) ? 1 : 0, 1);
+  check("feedback contentHash: different type → different hash", contentHash(a) !== contentHash(c) ? 1 : 0, 1);
+  check("feedback contentHash: stable", contentHash(a) === contentHash(a) ? 1 : 0, 1);
+}
+
 // — Report —
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) {
