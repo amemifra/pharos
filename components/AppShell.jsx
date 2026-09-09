@@ -32,6 +32,13 @@ export default function AppShell({ children }) {
   const [warm, setWarm] = useState({ artist: null, done: 0, total: 0 });
   useEffect(() => {
     let cancelled = false;
+    // Badge resume: the counter starts from the catalog ALREADY on this
+    // device (cached crossref records), not from 0 — a reload is a resume,
+    // not a restart. Live progress is added on top as the warm-up runs.
+    try {
+      const mapped = Object.keys(localStorage).filter((k) => k.startsWith("pf.store.crossref:v2:")).length;
+      if (mapped > 0 && !cancelled) setWarm({ artist: null, done: mapped, total: mapped });
+    } catch {}
     // CULTURAL CANON first: the warm-up (canonNames) and every ranking read
     // the active canon table — the user's own culture must be merged before
     // any proposal is computed (cultural canon, not a global one).
