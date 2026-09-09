@@ -473,20 +473,45 @@ function YourShowsSection({ subs, onOpen, onChange }) {
 
 function AddFeedForm({ onOpen }) {
   const [url, setUrl] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [err, setErr] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!url.trim() || resolving) return;
+    setResolving(true);
+    setErr(null);
+    try {
+      // Accepts RSS urls, Apple Podcasts links, or any web page with a
+      // declared <link rel="alternate" type="application/rss+xml"> (the RSS
+      // of e.g. choramedia.com is NOT linked in the page UI — only Apple /
+      // Spotify — but the site declares it in the HTML head).
+      const { resolveFeedFromInput } = await import("@/lib/podcastcharts");
+      onOpen(await resolveFeedFromInput(url));
+    } catch (e2) {
+      setErr(String(e2?.message ?? e2));
+    } finally {
+      setResolving(false);
+    }
+  };
   return (
-    <form
-      className="mt-6 flex gap-2"
-      onSubmit={(e) => { e.preventDefault(); if (url.trim()) onOpen(url.trim()); }}
-    >
-      <input
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://example.com/feed.xml"
-        className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-      />
-      <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">
-        Open
-      </button>
+    <form className="mt-6" onSubmit={submit}>
+      <div className="flex gap-2">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="RSS url, Apple Podcasts link, or any podcast page"
+          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+        />
+        <button disabled={resolving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+          {resolving ? "Resolving…" : "Open"}
+        </button>
+      </div>
+      {err && (
+        <p className="mt-2 text-xs text-amber-400" role="status">{err}</p>
+      )}
+      <p className="mt-2 text-[11px] text-zinc-600">
+        RSS first: Apple Podcasts links are resolved via the public iTunes lookup; any web page via its declared RSS alternate link.
+      </p>
     </form>
   );
 }
