@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePlayer } from "@/components/PlayerProvider";
 import { thumbUrl } from "@/lib/archive";
+import { fetchChapters } from "@/lib/podcast";
 import { loadPolicy, savePolicy, label, MODES } from "@/lib/restoration";
 import Manifesto from "@/components/Manifesto";
 import Icon from "@/components/Icon";
@@ -78,6 +79,29 @@ export default function NowPlayingOverlay({ open, onClose }) {
   const { current, playing, toggle, skip, progress, duration, seek, hasNext, hasPrev, queue, index, jumpTo, setSpeed } = usePlayer();
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
+
+  // CHAPTERS (#26, Podcasting 2.0): fetched once per episode when the overlay
+  // opens, cached in-memory per guid. Click → seek to the chapter start.
+  const [chapters, setChapters] = useState(null);
+  const chaptersCacheRef = useRef(new Map());
+  useEffect(() => {
+    if (!open || !current?.chaptersUrl) { setChapters(null); return; }
+    const key = current.id;
+    if (chaptersCacheRef.current.has(key)) { setChapters(chaptersCacheRef.current.get(key)); return; }
+    let alive = true;
+    setChapters(null);
+    fetchChapters(current.chaptersUrl).then((ch) => {
+      if (!alive) return;
+      chaptersCacheRef.current.set(key, ch);
+      setChapters(ch);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [open, current?.id, current?.chaptersUrl]);
+
+  // Poor-man's virtualization (#26): the queue renders a 100-row window with
+  // a "Show more" button instead of mounting thousands of rows.
+  const [queueWindow, setQueueWindow] = useState(100);
+  useEffect(() => { if (open) setQueueWindow(100); }, [open]);
 
   // Escape to close (desktop keyboard contract).
   useEffect(() => {
@@ -223,13 +247,34 @@ export default function NowPlayingOverlay({ open, onClose }) {
           </div>
         </section>
 
+        {/* Chapters (#26): shown only when the episode declares a chapters
+            file — an honest section, never a placeholder. */}
+        {chapters?.length > 0 && (
+          <section className="w-full max-w-md mb-4" aria-label="Chapters">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Chapters</h3>
+            <ol className="divide-y divide-zinc-800/60 rounded-lg border border-zinc-800/60">
+              {chapters.map((ch, i) => (
+                <li key={i}>
+                  <button
+                    onClick={() => seek(ch.starts[0] ?? 0)}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-900"
+                  >
+                    <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-600">{fmt(ch.starts[0] ?? 0)}</span>
+                    <span className="flex-1 truncate">{ch.title || `Chapter ${i + 1}`}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
         {/* Queue drawer */}
         <section className="w-full max-w-md" aria-label="Queue">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">
             Queue · {index + 1}/{queue.length}
           </h3>
           <ol className="divide-y divide-zinc-800/60 rounded-lg border border-zinc-800/60">
-            {queue.map((t, i) => (
+            {queue.slice(0, queueWindow).map((t, i) => (
               <li key={t.id}>
                 <button
                   onClick={() => jumpTo(i)}
