@@ -276,3 +276,20 @@ hardest legal domain, so it goes last with the most mature DQ discipline.
   path keeps the proportional estimate unless a measured bench on the target
   device justifies the wasm port. Probe: `node tests/silence-probe.mjs`
   (wasm/JS mask equality + boundary ground truth).
+
+## 8. PWA INSTALLABLE & OFFLINE (SHIPPED — status update, was declared roadmap)
+
+**Status: IMPLEMENTED** (service worker + manifest + opt-in local notifications;
+zero servers, static export unchanged). Item extracted from the original
+"installable web app" P0 constraint and shipped with this PR.
+
+| Piece | Mechanics | Contract |
+|---|---|---|
+| **Manifest** | `public/manifest.webmanifest` — name Pharos, standalone display, ink background (`#09090b`), square icons 192/512 from the ink/ivory/brass favicon assets | Lighthouse-installable on desktop + Android Chrome; iOS A2HS uses the same manifest (standalone only) |
+| **Service worker** | `public/sw.js` — base path derived from `registration.scope`; cache-first for immutable `/_next/static` + icons; stale-while-revalidate for page navigations; network-first with cache fallback for cross-origin feed fetches (the app opens offline) | Versioned caches (`pharos-static/pages/feeds/sync-v1`) with cleanup on activate; `skipWaiting` + `clients.claim` |
+| **Notifications without a server** | Opt-in toggle on Podcast → Your shows (`lib/notify.js`, `pf.notify`): on app open each subscribed feed is diffed against `pf.subseen:<feedUrl>` (same "new episodes" semantics as the page) and ONE summary local notification is fired via the SW registration. Where `periodicSync` exists the page pushes a sync snapshot (`subs` + last-seen) to the worker and registers tag `pharos-new-episodes` (≤12h interval, ≤10 feeds); the worker re-checks in the background and updates the markers. No push subscription service, no server, ever | Permission is requested ONLY inside the toggle click (never on load); default OFF; idempotent (lastSeen advances — no burst); dead feeds are skipped, never fatal |
+| **iOS honest fallback** | No Web Push / no periodicSync on iOS standalone → silent degradation to check-on-open; documented, never a broken promise | Docs: `Pharos-Technical-Documentation` §9 |
+
+Probe: `tests/e2e/pwa-probe.mjs` — zero-network e2e (manifest/served contract,
+SW registration + activation, cache-first evidence, seeded new-episode → one
+notification + last-seen advance + idempotent second check).
