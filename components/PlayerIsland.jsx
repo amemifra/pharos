@@ -46,6 +46,31 @@ export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden
     return () => window.removeEventListener("keydown", onKey);
   }, [videoView, onCollapse]);
 
+  // Native document fullscreen (owner: "full screen non solo nell'iframe,
+  // tutto il documento"): entering "full" asks the browser for real
+  // fullscreen of the iframe element (click = user activation, so the
+  // request is allowed); leaving it exits. CSS full-page stays as the
+  // fallback when the browser refuses (sandboxed embeds, iOS Safari).
+  useEffect(() => {
+    const el = islandRef?.current;
+    if (videoView === "full" && el?.requestFullscreen) {
+      el.requestFullscreen?.().catch(() => { /* CSS full-page remains */ });
+    } else if (document.fullscreenElement === el) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoView]);
+
+  // Browser-native exit (Esc in fullscreen, F11 toggle) collapses the view
+  // too: the document leaving fullscreen means the owner asked to leave.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) onCollapse?.();
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [onCollapse]);
+
   const frameClass =
     videoView === "pip"
       ? "fixed bottom-20 right-4 z-50 h-44 w-80 overflow-hidden rounded-lg border border-zinc-700 bg-black shadow-2xl md:bottom-20"
