@@ -180,6 +180,11 @@ export function PlayerProvider({ children }) {
         // we only surface honest feedback in the UI.
         if (msg.id) setTrackError(msg.id);
         break;
+      case "pf.exit":
+        // Island full-screen UI ✕/Esc (the island owns the keyboard while in
+        // native fullscreen): collapse the view from the shell side.
+        setVideoView("hidden");
+        break;
     }
   }, [post]);
 
