@@ -105,6 +105,30 @@ try {
   const dialogOpen = await page.locator("[role=dialog][aria-label='Now playing']").count();
   check("overlay not opened for video track", dialogOpen === 0, `dialogs=${dialogOpen}`);
 
+
+  // The full-screen island renders a real UI inside the iframe (cover,
+  // title, transport — owner: "non mostra una UI decente ne niente immagini").
+  await page.waitForFunction(() => {
+    const f = document.querySelector("iframe[title='Pharos player island']");
+    return f?.contentDocument?.body?.innerText.includes("E2E video podcast episode");
+  }, { timeout: 5_000 }).catch(() => {});
+  const uiText = await page.evaluate(() => {
+    const f = document.querySelector("iframe[title='Pharos player island']");
+    return f?.contentDocument?.body?.innerText ?? "";
+  });
+  check("island full-screen UI shows title", uiText.includes("E2E video podcast episode"), uiText.slice(0, 90).replace(/\n/g, " | "));
+  check("island full-screen UI has seek bar", uiText.includes("0:00"), "seek/time text missing");
+
+  // The island's own ✕ posts pf.exit and the shell collapses the view.
+  await page.locator("iframe[title='Pharos player island']").contentFrame()
+    .getByRole("button", { name: "Close full screen player" }).click();
+  await page.waitForFunction(() => {
+    const f = document.querySelector("iframe[title='Pharos player island']");
+    return f && /h-0 w-0/.test(f.className);
+  }, { timeout: 5_000 }).catch(() => {});
+  const afterExit = await iframeClass();
+  check("island ✕ collapses the view", /h-0 w-0/.test(afterExit ?? ""), afterExit ?? "(null)");
+
   // Esc collapses back to hidden.
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => {
