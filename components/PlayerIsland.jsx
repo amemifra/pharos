@@ -90,17 +90,15 @@ export default function PlayerIsland({ onMessage, islandRef, videoView = "hidden
         aria-hidden={videoView === "hidden"}
         tabIndex={videoView === "hidden" ? -1 : 0}
       />
-      {videoView !== "hidden" && (
+      {/* pip keeps the shell-side ✕ (the island's own ✕ would sit inside a
+          0-size-feeling mini window); the FULL view's ✕/Esc live inside the
+          island UI itself (app/player/page.jsx posts pf.exit). */}
+      {videoView === "pip" && (
         <button
           type="button"
           onClick={onCollapse}
-          aria-label="Close video player"
-          title={videoView === "full" ? "Close full player (Esc)" : "Close mini player"}
-          className={
-            videoView === "full"
-              ? "fixed right-4 top-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-200 hover:bg-zinc-800"
-              : "fixed bottom-[15.3rem] right-4 z-[60] flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800"
-          }
+          aria-label="Close mini player"
+          className="fixed bottom-[15.3rem] right-4 z-[60] flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
             <path d="m5 5 14 14M19 5 5 19" />
