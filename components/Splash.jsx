@@ -12,7 +12,10 @@ import PharosMark from "@/components/PharosMark";
  *     a NEW pf.* key; existing pf.* keys are never renamed/repurposed);
  *   - skips entirely under prefers-reduced-motion (owner: OFF on reduced
  *     motion — motion must never be forced);
- *   - a tap/click/keydown dismisses immediately (never a gate);
+ *   - a tap/click/keydown dismisses immediately AND passes through to the
+ *     page beneath: the overlay is always pointer-events-none and dismissal
+ *     is a window-level listener (owner: "never a gate" — the first click on
+ *     e.g. +Follow must reach the page, not be swallowed by the intro).
  *   - fade-out ~1.6s back into the Home.
  */
 export default function Splash() {
@@ -40,8 +43,13 @@ export default function Splash() {
     const leaveTimer = setTimeout(() => setLeaving(true), 2600);
     const goneTimer = setTimeout(() => dismiss(), 4400);
     const onKey = () => dismiss();
+    // Dismiss on ANY pointer press, window-level: the overlay itself is
+    // pointer-events-none, so the same press also reaches the page element
+    // beneath it (button click lost otherwise — swallowed by the intro).
+    const onDown = () => dismiss();
+    window.addEventListener("pointerdown", onDown);
     window.addEventListener("keydown", onKey);
-    return () => { clearTimeout(leaveTimer); clearTimeout(goneTimer); window.removeEventListener("keydown", onKey); };
+    return () => { clearTimeout(leaveTimer); clearTimeout(goneTimer); window.removeEventListener("pointerdown", onDown); window.removeEventListener("keydown", onKey); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -51,9 +59,8 @@ export default function Splash() {
     <div
       role="status"
       aria-label="Pharos"
-      onClick={dismiss}
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-ink-950 transition-opacity duration-[1600ms] ease-out ${
-        leaving ? "opacity-0 pointer-events-none" : "opacity-100"
+      className={`fixed inset-0 z-[100] pointer-events-none flex flex-col items-center justify-center gap-5 bg-ink-950 transition-opacity duration-[1600ms] ease-out ${
+        leaving ? "opacity-0" : "opacity-100"
       } motion-reduce:hidden`}
       data-testid="splash"
     >
