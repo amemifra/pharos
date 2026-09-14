@@ -189,8 +189,28 @@ const children = [
   H2("8.3 Status"),
   P("Implemented: policy module, worklet processor, island wiring, overlay selector, benchmark function, honest AI-unavailable state. Pending stabilization: dedicated E2E test (tests/e2e/restoration.mjs exists; archive.org latency made the play-wait flaky at time of writing). The regression proof for the default-off contract is the standard journeys suite (10/10 with the feature in the codebase)."),
 
-  /* 9 — Roadmap */
-  H1("9. Roadmap (docs/roadmap-expansion.md)"),
+  /* 9 — PWA */
+  H1("9. PWA installable, offline & local notifications"),
+  P("Pharos is installable as a PWA with zero servers: a static manifest (public/manifest.webmanifest — standalone display, ink background #09090b, square 192/512 icons from the ink/ivory/brass favicon assets) and a hand-written service worker (public/sw.js) whose every path is derived from registration.scope, so the same file serves the root build and the /pharos/ GitHub Pages deployment."),
+  H2("9.1 Cache strategy"),
+  table(
+    ["Traffic", "Strategy", "Rationale"],
+    [
+      ["Immutable /_next/static + icons", "Cache-first (pharos-static-v1)", "Content-hashed assets never change — fastest cold start"],
+      ["Page navigations (static export)", "Stale-while-revalidate (pharos-pages-v1)", "Instant open; refresh lands behind; offline shell on total miss"],
+      ["Cross-origin feed/data fetches", "Network-first with cache fallback (pharos-feeds-v1)", "Freshness first, offline last — the app opens and reads cached feeds when unreachable"],
+    ]
+  ),
+  P("Versioned caches with cleanup on activate; skipWaiting + clients.claim so a new worker takes over without trapping the user in a stale shell."),
+  H2("9.2 New-episode notifications without a server (lib/notify.js)"),
+  BULLET("Opt-in only: the toggle on Podcast → Your shows is the ONLY place Notification.requestPermission is ever called — inside the user gesture, never on page load. Default OFF (pf.notify), respecting the documented manual-refresh decision: the periodic check exists only where the user explicitly asked for it."),
+  BULLET("Check-on-open (all browsers): each subscribed feed's newest episode is diffed against pf.subseen:<feedUrl> — the SAME read path (lib/podcast.loadFeed, 36h shared epfeed snapshot) and the same last-seen markers the 'new episodes' section already uses — then ONE summary notification is fired via the SW registration and the markers advance (idempotent, no burst)."),
+  BULLET("Background check (periodicSync-capable browsers): the page pushes a sync snapshot (≤10 feeds + last-seen) to the worker (pharos:sync-state, persisted in pharos-sync-v1) and registers tag pharos-new-episodes (≤12h). The worker re-fetches feeds network-first (cache fallback), diffs with the same pure pickNewEpisodes() logic (exported for node tests), shows the summary notification and advances the snapshot markers."),
+  BULLET("iOS: no Web Push and no periodicSync in standalone — silent degradation to check-on-open, documented in the toggle tooltip; never a broken promise."),
+  BULLET("Zero-network proof: tests/e2e/pwa-probe.mjs seeds a synthetic same-origin feed with a future pubDate and asserts the manifest/served contract, SW activation, cache-first evidence, one notification, last-seen advance and the idempotent second check."),
+
+  /* 10 — Roadmap */
+  H1("10. Roadmap (docs/roadmap-expansion.md)"),
   table(
     ["Phase", "Medium", "Complexity", "Key additions"],
     [
@@ -201,8 +221,8 @@ const children = [
   ),
   P("Cross-medium schema: generic Work/Unit record with medium discriminator; the inverse process (canonical × availability) applies unchanged with per-medium canonical sources (Wikidata for film, OpenLibrary for books, feed URL for podcasts). See also section 8: gramophone restoration is the first benchmark-gated WASM enhancement, applied to music today and reusable for any historical audio in future media."),
 
-  /* 10 — Glossary */
-  H1("10. Glossary"),
+  /* 11 — Glossary */
+  H1("11. Glossary"),
   table(
     ["Term", "Meaning"],
     [

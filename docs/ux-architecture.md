@@ -188,3 +188,30 @@ Rules: island never fetches metadata (shell owns all data); island never touches
 2. **Phase 2 — Search/Library split + micro-patterns.** Extract `/search` (recent searches, top result card, chips), add `/library` (saved + recently played from feedback queue), tabs become Home/Search/Library, unify states in `SurfaceState`, "Play next/last" context actions.
 3. **Phase 3 — Expanded player + queue.** `/now-playing` expanded player inside the island, queue drawer, "Play similar" (same artist/shelf), swipe gestures.
 4. **Phase 4 — WASM islands (data-driven only).** Move ranker/fingerprint into compute islands **only if** `lib/bench.js` on the low-end test device shows the WASM criterion is met; otherwise keep in shell. Catalog coverage (`CatalogCoverage`) promoted to a first-class browse surface ("Catalog gaps" page) if it survives evaluation.
+
+---
+
+## PWA installable, offline & notifications (shipped — pattern selection notes)
+
+**Pattern selection** (TASK 2 table applied): installability follows the
+native-app shell pattern (standalone display, persistent chrome); the
+notification UX follows the "quiet system" rule — the app never interrupts,
+it waits for an explicit opt-in and then surfaces ONE summarized event.
+
+- **Installability UX**: standard browser install (address-bar icon /
+  menu) — no custom in-app install banner (anti-pattern: unsolicited
+  prompts). Manifest is standalone with the ink background so the OS chrome
+  never flashes white on cold start.
+- **Offline behavior**: cold start always works (precached shell + SWR
+  pages); feed/data reads that miss the network fall back to the last cached
+  snapshot with the existing honest surface states ("temporarily
+  unreachable") — offline is a state, never an error dialog.
+- **Notification settings UX**: single toggle on Podcast → Your shows
+  ("🔔 New-episode alerts: on/off"). ON = permission requested inside that
+  tap (the only prompt, ever), then check-on-open + periodic background
+  check where the browser supports `periodicSync`. OFF = toggle off +
+  periodic registration unregistered. Notifications are ONE summary
+  ("N new episodes across M shows") with a deep link to `/podcast` — never
+  a per-episode burst.
+- **iOS**: standalone install only, no Web Push — the toggle still works
+  (check-on-open path) and the fallback is honest in the title text.

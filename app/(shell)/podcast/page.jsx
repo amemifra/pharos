@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadFeed, relativeDate, bigArt, weeklyListeningHours } from "@/lib/podcast";
+import { toggleNotifications, notifyState } from "@/lib/notify";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows, isVideoEnclosure, markFeedSeen, feedLastSeen } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
@@ -501,6 +502,7 @@ function YourShowsSection({ subs, onOpen, onChange }) {
   return (
     <section className="mb-10" aria-label="Your shows">
       <h2 className="mb-4 text-xl font-bold tracking-tight">Your shows · {subs.length}</h2>
+      <NotifyToggle />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
         {subs.map((s) => (
           <div key={s.feedUrl} className="group rounded-xl bg-zinc-900 p-3 transition-colors hover:bg-zinc-800">
@@ -526,6 +528,26 @@ function YourShowsSection({ subs, onOpen, onChange }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function NotifyToggle() {
+  const [on, setOn] = useState(false);
+  useEffect(() => { setOn(notifyState().enabled); }, []);
+  const flip = async () => {
+    const next = !(await toggleNotifications(!on)); // permission asked INSIDE the gesture
+    setOn(next);
+  };
+  return (
+    <button
+      onClick={flip}
+      aria-pressed={on}
+      title={on ? "New-episode alerts are on (local, no server)" : "Turn on local new-episode alerts — no server, checked on open or periodically where the browser allows"}
+      className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+    >
+      <span aria-hidden="true">🔔</span>
+      New-episode alerts: {on ? "on" : "off"}
+    </button>
   );
 }
 

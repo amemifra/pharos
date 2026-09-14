@@ -10,6 +10,7 @@ import Icon from "@/components/Icon";
 import PharosMark from "@/components/PharosMark";
 import Manifesto from "@/components/Manifesto";
 import FeedbackDialog from "@/components/FeedbackDialog";
+import { bootNotifications } from "@/lib/notify";
 
 const NAV = [
   { href: "/", icon: "home", label: "Home" },
@@ -54,6 +55,15 @@ export default function AppShell({ children }) {
     // Idle start: never compete with first paint on low-end devices.
     const t = setTimeout(kick, 15_000);
     return () => { cancelled = true; clearTimeout(t); };
+  }, []);
+
+  // PWA installable: register the service worker, then — ONLY if the user
+  // opted in (pf.notify) — the no-server new-episode check-on-open + the
+  // worker-side periodicSync snapshot. Never prompts: see lib/notify.js.
+  useEffect(() => {
+    let cancelled = false;
+    import("@/lib/notify").then((m) => { if (!cancelled) m.bootNotifications(); }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // Shared ranker consensus: adopt stronger community evidence on boot,
