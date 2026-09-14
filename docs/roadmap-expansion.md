@@ -260,3 +260,19 @@ hardest legal domain, so it goes last with the most mature DQ discipline.
    gains a video decision table, but real 240p/480p selection depends on
    source-provided transcodes — PeerTube handles this natively, archive.org
    partially; honest unavailable-state when no suitable derivative exists.
+
+---
+
+## 7. RESOLVED GAPS (ledger)
+
+- **WASM silence detection (music tracklist alignment)** — RESOLVED.
+  `detectSilenceBoundaries` in `lib/silence.js` is no longer a stub: a compact
+  in-repo WebAssembly byte module (no toolchain, no network fetch) computes the
+  per-sample silence mask and shared JS post-processing merges it into
+  measurable gaps, so compound-track `starts[]` offsets can come from measured
+  silence instead of proportional estimates. The JS fallback implements the
+  same semantics for environments without WebAssembly, and the module is
+  adoption-gated by the `lib/bench.js` discipline (Principle 2): the player
+  path keeps the proportional estimate unless a measured bench on the target
+  device justifies the wasm port. Probe: `node tests/silence-probe.mjs`
+  (wasm/JS mask equality + boundary ground truth).
