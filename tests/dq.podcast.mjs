@@ -106,5 +106,30 @@ if (sampled > 0) {
   check("resumeSeconds: unknown duration keeps raw progress", resumeSeconds({ progressSec: 120 }, null) === 120);
 }
 
+// filterPlayableEpisodes (restricted-guard plan::40::gap-podcast-restricted-guard):
+// bulk enqueue guard — restricted episodes never enter the queue, honest report.
+{
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) =>
+    String(url).includes("restricted")
+      ? { ok: false, status: 401 }
+      : { ok: true, status: 200 };
+  try {
+    const { filterPlayableEpisodes } = await import("../lib/subscribe.js");
+    const eps = [
+      { guid: "ok-1", url: "https://cdn.example/ok-1.mp3" },
+      { guid: "bad-1", url: "https://cdn.example/restricted-1.mp3" },
+      { guid: "ok-2", url: "https://cdn.example/ok-2.mp3" },
+    ];
+    let reported = [];
+    const playable = await filterPlayableEpisodes(eps, (r) => { reported = r; });
+    check("filterPlayableEpisodes: restricted excluded, order preserved", playable.map((e) => e.guid).join(",") === "ok-1,ok-2");
+    check("filterPlayableEpisodes: restricted reported honestly", reported.map((e) => e.guid).join(",") === "bad-1");
+    check("filterPlayableEpisodes: empty input → empty queue", (await filterPlayableEpisodes([])).length === 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) process.exit(1);
