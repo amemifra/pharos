@@ -8,6 +8,7 @@ import { batchSitelinks, pageviews } from "@/lib/notability";
 import { topListenedArtists } from "@/lib/feedback";
 import { normalizeSearchItem, byPopularity } from "@/lib/pipeline";
 import { SHELVES } from "@/lib/catalog";
+import { ARTIST_PORTRAITS, IMAGES_CREDIT, artistPortrait } from "@/lib/artistportraits";
 import PharosMark from "@/components/PharosMark";
 
 import AlbumCard from "@/components/AlbumCard";
@@ -28,6 +29,22 @@ export default function HomePage() {
   const [shelves, setShelves] = useState({});
   const [artists, setArtists] = useState(null);
   const [recent, setRecent] = useState([]);
+  const [portraits, setPortraits] = useState({});
+
+  // Curated Wikimedia portraits: resolve every mapped artist once on mount
+  // (artistPortrait falls back to the Wikipedia lead image for unmapped
+  // artists and seeds the shared catalog cache for the artist page).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const resolved = {};
+      for (const name of Object.keys(ARTIST_PORTRAITS)) {
+        resolved[name] = await artistPortrait(name);
+      }
+      if (alive) setPortraits(resolved);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   // Thematic shelves + popular artists: loaded once on mount.
   useEffect(() => {
@@ -163,12 +180,19 @@ export default function HomePage() {
               <div className="aspect-square overflow-hidden rounded-full bg-zinc-800 shadow-lg shadow-black/30 ring-1 ring-zinc-800 transition-all duration-200 group-hover:ring-emerald-600/50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`https://archive.org/services/img/${encodeURIComponent(name)}`}
-                  alt=""
+                  src={portraits[name] ?? `https://archive.org/services/img/${encodeURIComponent(name)}`}
+                  alt={portraits[name] ? name : ""}
                   loading="lazy"
                   decoding="async"
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  onError={(e) => { e.currentTarget.style.opacity = 0.2; }}
+                  onError={(e) => {
+                    if (e.currentTarget.src !== `https://archive.org/services/img/${encodeURIComponent(name)}`) {
+                      // Wikimedia portrait failed → archive.org image (temple placeholder).
+                      e.currentTarget.src = `https://archive.org/services/img/${encodeURIComponent(name)}`;
+                    } else {
+                      e.currentTarget.style.opacity = 0.2;
+                    }
+                  }}
                 />
               </div>
               <p className="mt-2.5 truncate text-sm font-medium">{name}</p>
@@ -176,6 +200,7 @@ export default function HomePage() {
             </Link>
           ))}
         </div>
+        <p className="mt-1 text-[11px] text-zinc-600">{IMAGES_CREDIT}</p>
       </section>
 
       {/* Thematic shelves */}
