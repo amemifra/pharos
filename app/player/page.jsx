@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { assetPath } from "@/lib/basepath";
+import { thumbUrl } from "@/lib/archive";
 
 /**
  * PLAYER ISLAND (phase 1 of docs/ux-architecture.md).
@@ -22,6 +23,7 @@ import { assetPath } from "@/lib/basepath";
  *   island → shell:
  *     { type: "pf.ready" }
  *     { type: "pf.state", playing, index, progress, duration }  (≤1/s on progress)
+ *     { type: "pf.exit" }   — full-screen UI ✕/Esc: shell collapses the island
  *
  * The island owns persistence for its queue under the namespaced key
  * `pf.player.queue`: when the SHELL reloads, the shell re-hydrates from
@@ -34,6 +36,17 @@ export default function PlayerIslandPage() {
   const queueRef = useRef([]);
   const indexRef = useRef(-1);
   const lastStateSentRef = useRef(0);
+  // Full-screen island UI (owner: "non mostra una UI decente ne niente
+  // immagini"): a render mirror of the throttled state the effect already
+  // computes — the island now renders cover, title, seek and transport
+  // instead of a bare black <video>. React state updates ≤1/s (sendState
+  // cadence), which is exactly the seek-bar cadence.
+  const [ui, setUi] = useState({ index: -1, playing: false, progress: 0, duration: 0 });
+  const uiSetterRef = useRef(null);
+  uiSetterRef.current = setUi;
+  // The render-scoped transport needs loadAndPlay/persist, which live in the
+  // boot effect's closure: they publish themselves here.
+  const transportRef = useRef({ loadAndPlay: () => {}, persist: () => {} });
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -69,6 +82,15 @@ export default function PlayerIslandPage() {
           progress: audio?.currentTime ?? 0,
           duration: audio?.duration ?? 0,
         }, "*");
+      } catch {}
+      // Mirror for the island's own full-screen UI (see useState above).
+      try {
+        uiSetterRef.current?.({
+          index: indexRef.current,
+          playing: audio ? !audio.paused : false,
+          progress: audio?.currentTime ?? 0,
+          duration: audio?.duration ?? 0,
+        });
       } catch {}
     };
 
@@ -176,6 +198,8 @@ export default function PlayerIslandPage() {
         }));
       } catch {}
     };
+    // Publish the closures the render-scoped transport controls call.
+    transportRef.current = { loadAndPlay, persist };
 
     /** Throttled snapshot while playing (3s) + on tab close: the reload
      *  resumes from the last saved position, not from zero. */
@@ -290,6 +314,13 @@ export default function PlayerIslandPage() {
 
     window.addEventListener("message", onMessage);
     window.addEventListener("pagehide", onPageHide);
+    // Esc inside the island (native fullscreen sends the keyboard HERE, not
+    // to the shell): ask the shell to collapse the full view.
+    const onIslandKey = (e) => {
+      if (e.key !== "Escape") return;
+      try { window.parent.postMessage({ type: "pf.exit" }, "*"); } catch {}
+    };
+    window.addEventListener("keydown", onIslandKey);
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("play", onPlay);
@@ -309,6 +340,7 @@ export default function PlayerIslandPage() {
     return () => {
       window.removeEventListener("message", onMessage);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("keydown", onIslandKey);
       window.removeEventListener("pharos:restoration", onRestorationChange);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
@@ -320,16 +352,111 @@ export default function PlayerIslandPage() {
     };
   }, []);
 
-  // The island renders no visible UI for audio; for VIDEO podcasts the shell
-  // expands this iframe (pip/full) and the <video> fills it (owner request:
-  // the video IS the preview, expandable to page/full screen).
+  // Full-screen island UI. Video podcasts keep the cinema view (the video
+  // IS the preview, owner) with a ✕ overlay; audio-only episodes render a
+  // proper player: large cover, title/artist, seek bar, transport. Media
+  // element stays THE same <video> either way (restoration graph attached).
+  const track = queueRef.current[ui.index] ?? null;
+  const albumId = track?.id?.split("/")[0] ?? "";
+  const cover = track?.cover ?? (albumId ? thumbUrl(albumId) : null);
+  const fmt = (s) => (!Number.isFinite(s) ? "0:00" : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`);
+  const toggle = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) a.play().catch(() => {});
+    else a.pause();
+  };
+  const skipTo = (next) => {
+    const a = audioRef.current;
+    if (!a) return;
+    const n = Math.max(0, Math.min(next, queueRef.current.length - 1));
+    if (n === indexRef.current) return;
+    indexRef.current = n;
+    transportRef.current.persist();
+    transportRef.current.loadAndPlay();
+  };
+  const exitFull = () => {
+    try { window.parent.postMessage({ type: "pf.exit" }, "*"); } catch {}
+  };
+  const btn = "flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-colors hover:text-white";
+
   return (
-    <video
-      ref={audioRef}
-      playsInline
-      controls
-      preload="metadata"
-      style={{ position: "fixed", inset: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000" }}
-    />
+    <div style={{ position: "fixed", inset: 0, background: "#09090b", overflow: "hidden" }}>
+      {/* the ONE media element: cinema view for video, hidden engine for audio */}
+      <video
+        ref={audioRef}
+        playsInline
+        controls={!!track?.video}
+        preload="metadata"
+        style={{
+          position: "fixed", inset: 0, width: "100%", height: "100%",
+          objectFit: "contain", background: "#000",
+          visibility: track?.video ? "visible" : "hidden",
+        }}
+      />
+      {!track?.video && (
+        <div style={{
+          position: "fixed", inset: 0, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 20, padding: 24,
+        }}>
+          {/* large cover — feed cover first, archive.org thumbnail fallback,
+              honest glyph when neither resolves */}
+          <div style={{
+            width: "min(60vh, 280px)", height: "min(60vh, 280px)", borderRadius: 16,
+            overflow: "hidden", background: "#18181b", boxShadow: "0 25px 60px rgba(0,0,0,.6)",
+          }}>
+            {cover ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={cover} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) => { e.currentTarget.style.display = "none"; }} />
+            ) : (
+              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a", fontSize: 40 }}>♪</div>
+            )}
+          </div>
+          <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 18, color: "#f4f4f5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {track?.title ?? "Nothing loaded"}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#a1a1aa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {track?.artist ?? ""}
+            </p>
+          </div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            <input
+              type="range" min={0} max={ui.duration || 1} step={1} value={ui.progress}
+              onChange={(e) => { const a = audioRef.current; if (a && Number.isFinite(Number(e.target.value))) a.currentTime = Number(e.target.value); }}
+              style={{ width: "100%", accentColor: "#d4a437" }} aria-label="Seek"
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontVariantNumeric: "tabular-nums", color: "#71717a", marginTop: 4 }}>
+              <span>{fmt(ui.progress)}</span><span>{fmt(ui.duration)}</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <button type="button" onClick={() => skipTo((ui.index ?? 0) - 1)} style={btnCss} aria-label="Previous track">⏮</button>
+            <button type="button" onClick={toggle} style={{
+              width: 64, height: 64, borderRadius: "50%", border: "none", cursor: "pointer",
+              background: "#ffffff", color: "#000", fontSize: 22, display: "flex",
+              alignItems: "center", justifyContent: "center",
+            }} aria-label={ui.playing ? "Pause" : "Play"}>{ui.playing ? "❚❚" : "▶"}</button>
+            <button type="button" onClick={() => skipTo((ui.index ?? 0) + 1)} style={btnCss} aria-label="Next track">⏭</button>
+          </div>
+        </div>
+      )}
+      {/* ✕ exit — posts pf.exit; the shell collapses the island (and exits
+          native fullscreen with it). Same on Esc, here or in the shell. */}
+      <button
+        type="button" onClick={exitFull} aria-label="Close full screen player"
+        style={{
+          position: "fixed", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%",
+          border: "none", cursor: "pointer", background: "rgba(24,24,27,.8)", color: "#e4e4e7",
+          fontSize: 16, zIndex: 10,
+        }}
+      >✕</button>
+    </div>
   );
+}
+const btnCss = {
+  width: 48, height: 48, borderRadius: "50%", border: "1px solid #3f3f46",
+  background: "transparent", color: "#d4d4d8", fontSize: 15, cursor: "pointer",
+  display: "flex", alignItems: "center", justifyContent: "center",
 }
