@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { loadFeed, relativeDate, bigArt, weeklyListeningHours } from "@/lib/podcast";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
@@ -33,6 +33,9 @@ function PodcastPageInner() {
   // restricted (401/403) or dead are never queued — honest label instead.
   const [unplayable, setUnplayable] = useState({});
   const [checking, setChecking] = useState(null);
+  // Honest queue feedback (restricted guard): what the bulk enqueue did instead
+  // of silently queueing dead enclosures.
+  const [queueNotice, setQueueNotice] = useState(null);
 
   const load = async (force = false) => {
     setError(null);
@@ -72,6 +75,10 @@ function PodcastPageInner() {
     const i = data.episodes.findIndex((ep) => !played[ep.guid]);
     return i === -1 ? 0 : i;
   }, [data, played]);
+  const firstUnplayedIn = useCallback((eps) => {
+    const i = eps.findIndex((ep) => !played[ep.guid]);
+    return i === -1 ? 0 : i;
+  }, [played]);
 
   if (!feedUrl) {
     // Navigation via router (next/navigation): basePath-aware. Plain
@@ -160,10 +167,33 @@ function PodcastPageInner() {
             </button>
             {tracks.length > 0 && (
               <button
-                onClick={() => playQueue(tracks, firstUnplayed)}
-                className="rounded-full border border-zinc-700 px-5 py-2 text-xs font-semibold text-zinc-300 hover:text-white"
+                onClick={async () => {
+                  if (checking) return;
+                  setChecking("all");
+                  setQueueNotice(null);
+                  try {
+                    // Restricted guard at the enqueue boundary: only playable
+                    // episodes enter the queue (lib/subscribe.filterPlayableEpisodes
+                    // → lib/podcast.isPlayable). pf.trackerror stays a safety net.
+                    const { filterPlayableEpisodes } = await import("@/lib/subscribe");
+                    const eps = await filterPlayableEpisodes(data.episodes, (restricted) =>
+                      setUnplayable((m) => ({ ...m, ...Object.fromEntries(restricted.map((e) => [e.guid, true])) }))
+                    );
+                    if (!eps.length) {
+                      setQueueNotice("None of these episodes is playable right now — the publisher restricts them (401/403).");
+                      return;
+                    }
+                    const skipped = data.episodes.length - eps.length;
+                    if (skipped > 0) setQueueNotice(`${skipped} episode${skipped === 1 ? "" : "s"} skipped — restricted by the publisher (401/403).`);
+                    playQueue(episodesToTracks(eps, data?.show?.image ?? null), firstUnplayedIn(eps));
+                  } finally {
+                    setChecking(null);
+                  }
+                }}
+                disabled={checking === "all"}
+                className="rounded-full border border-zinc-700 px-5 py-2 text-xs font-semibold text-zinc-300 hover:text-white disabled:opacity-50"
               >
-                ▶ Play
+                {checking === "all" ? "Checking availability…" : "▶ Play"}
               </button>
             )}
             <button
@@ -176,6 +206,9 @@ function PodcastPageInner() {
             <span className="text-[11px] text-zinc-600">
               {data.source === "cache" ? "shared snapshot" : "fetched live"}
             </span>
+            {queueNotice && (
+              <p className="w-full text-xs text-amber-400" role="status">{queueNotice}</p>
+            )}
           </div>
         </header>
       )}
@@ -271,6 +304,9 @@ async function markPlayedAndPlay(ep, prev, playQueue, track) {
 function NewEpisodesSection({ subs, onOpen }) {
   const { playQueue } = usePlayer();
   const [items, setItems] = useState(null); // null = loading
+  // Restricted guard state: restricted episodes are never queued — the play
+  // control is replaced by an honest 🔒 label (never a dead button).
+  const [restricted, setRestricted] = useState({});
   useEffect(() => {
     let alive = true;
     if (!subs.length) { setItems([]); return; }
@@ -294,7 +330,12 @@ function NewEpisodesSection({ subs, onOpen }) {
   }, [subs]);
 
   if (!subs.length) return null; // YourShowsSection explains HOW to follow
-  const play = (item) => {
+  const play = async (item) => {
+    const { isPlayable } = await import("@/lib/podcast");
+    if (!(await isPlayable(item.ep))) {
+      setRestricted((m) => ({ ...m, [item.ep.guid]: true }));
+      return;
+    }
     const t = episodesToTracks([item.ep], item.show?.image ?? null);
     import("@/lib/subscribe").then((m) => m.markPlayed(item.ep.guid, 0));
     playQueue(t, 0);
@@ -320,19 +361,24 @@ function NewEpisodesSection({ subs, onOpen }) {
                   {item.show?.title ?? item.feedUrl} · {relativeDate(item.ep.pubDateMs)}
                 </button>
               </span>
-              <button
-                onClick={() => play(item)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500"
-                aria-label={`Play ${item.ep.title}`}
-              >
-                <Icon name="play" className="h-4 w-4" />
-              </button>
+              {restricted[item.ep.guid] ? (
+                <span className="shrink-0 text-[11px] text-amber-400" role="status">🔒 restricted</span>
+              ) : (
+                <button
+                  onClick={() => play(item)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500"
+                  aria-label={`Play ${item.ep.title}`}
+                >
+                  <Icon name="play" className="h-4 w-4" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
     </section>
-  );}
+  );
+}
 
 /**
  * LATEST RELEASES (owner): the newest drops across the shows the user
@@ -376,7 +422,15 @@ function LatestReleasesSection({ subs, onOpen }) {
     return () => { alive = false; };
   }, [subs]);
 
-  const play = (item) => {
+  // Restricted guard state: a restricted latest episode is never queued —
+  // the play control is replaced by an honest 🔒 label (never a dead button).
+  const [restricted, setRestricted] = useState({});
+  const play = async (item) => {
+    const { isPlayable } = await import("@/lib/podcast");
+    if (!(await isPlayable(item.ep))) {
+      setRestricted((m) => ({ ...m, [item.ep.guid]: true }));
+      return;
+    }
     const t = episodesToTracks([item.ep], item.show?.image ?? null);
     import("@/lib/subscribe").then((m) => m.markPlayed(item.ep.guid, 0));
     playQueue(t, 0);
@@ -406,13 +460,17 @@ function LatestReleasesSection({ subs, onOpen }) {
                     <span className="flex h-full w-full items-center justify-center"><Icon name="podcast" className="h-8 w-8 text-zinc-600" /></span>
                   )}
                 </button>
-                <button
-                  onClick={() => play(item)}
-                  className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-500"
-                  aria-label={`Play latest episode of ${item.show?.title ?? "show"}`}
-                >
-                  <Icon name="play" className="h-4 w-4" />
-                </button>
+                {restricted[item.ep.guid] ? (
+                  <span className="absolute bottom-2 right-2 rounded-full bg-zinc-900/90 px-2 py-1.5 text-[11px] text-amber-400" role="status">🔒 restricted</span>
+                ) : (
+                  <button
+                    onClick={() => play(item)}
+                    className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-500"
+                    aria-label={`Play latest episode of ${item.show?.title ?? "show"}`}
+                  >
+                    <Icon name="play" className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <p className="mt-2 truncate text-xs font-medium text-zinc-300">{item.show?.title}</p>
               <p className="truncate text-[11px] text-zinc-500" title={item.ep.title}>{item.ep.title}</p>
