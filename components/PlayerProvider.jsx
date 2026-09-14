@@ -268,12 +268,11 @@ export function PlayerProvider({ children }) {
 
   // Video podcast view (owner): NEVER auto-opens (many audio-only feeds are
   // mislabeled video/mp4 — the black full-screen of a false positive is
-  // worse than a tap). The view exists only when the user opens it from the
-  // NowPlayingBar and auto-hides when the current track is not video.
+  // worse than a tap). The view opens ONLY on an explicit user action —
+  // detail click (every track, owner: full screen is for audio too) or the
+  // cover button — and collapses on Esc/✕/native-FS exit. No auto-hide:
+  // an audio episode in the full view is exactly what the owner asked for.
   const [videoView, setVideoView] = useState("hidden");
-  useEffect(() => {
-    setVideoView((v) => (current?.video ? v : "hidden"));
-  }, [current?.video]);
 
   // Track load failure (dead URL: restricted 401, empty enclosure). Honest
   // feedback instead of a frozen player; keyed by track id so NowPlayingBar
