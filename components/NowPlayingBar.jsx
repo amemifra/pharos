@@ -117,11 +117,16 @@ export default function NowPlayingBar() {
           )}
         </button>
 
-        {/* title/artist — tap opens the full-screen Now Playing overlay */}
+        {/* title/artist — tap opens the full-screen Now Playing overlay;
+            for a VIDEO podcast it expands the player island to full page
+            instead (owner: "il click sul dettaglio deve portare l'island a
+            full screen" — the overlay would only show a static cover while
+            the video keeps playing in the hidden iframe). Esc / the ✕ in
+            the island view collapse it back. */}
         <button
-          onClick={() => setExpanded(true)}
+          onClick={() => (current.video ? setVideoView("full") : setExpanded(true))}
           className="min-w-0 flex-1 text-left md:max-w-xs"
-          aria-label="Open now playing"
+          aria-label={current.video ? "Expand video player to full page" : "Open now playing"}
         >
           <p className="truncate text-sm font-semibold">{current.title}</p>
           <p className="truncate text-xs text-zinc-500">
