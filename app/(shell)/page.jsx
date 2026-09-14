@@ -101,7 +101,7 @@ export default function HomePage() {
             <PharosMark className="h-6 w-6" />
           </span>
           <h1 className="text-2xl font-bold tracking-tight">
-            Public<span className="text-emerald-500">Flac</span>
+            Phar<span className="text-emerald-500">os</span>
           </h1>
         </div>
         <Link
