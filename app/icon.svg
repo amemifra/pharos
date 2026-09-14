@@ -6,7 +6,8 @@
     </linearGradient>
     <clipPath id="tw"><path d="M216 208h80l40 240H176Z"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="120" fill="#121110"/>
+  <!-- full-bleed square canvas: no border radius, corners always opaque (ink) -->
+  <rect width="512" height="512" fill="#121110"/>
   <!-- light beam as sound waves -->
   <g fill="none" stroke-width="20" stroke-linecap="round">
     <path d="M297 135A64 64 0 0 1 297 233" stroke="#e8bd6d"/>
