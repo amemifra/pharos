@@ -88,12 +88,16 @@ Legend: **[S]** Spotify, **[AM]** Amazon Music, **[YT]** YouTube Music, **[AP]**
 
 | Route | Component | Status |
 |---|---|---|
-| `/` | Home: search bar, Popular artists row, shelf rows, (new) Recently played row | exists, extend |
+| `/` | Home: search bar, Popular artists row (Wikimedia portraits, `lib/artistportraits.js`), shelf rows, (new) Recently played row | exists, extend |
 | `/search` | Dedicated search page: input + recent searches + type chips + top result card | **NEW** (extracted from home) |
 | `/artist/[name]` | Artist hero + discography by decade + `CatalogCoverage` | exists, extend |
 | `/album/[identifier]` | Album hero + tracklist + verify badges | exists, extend |
 | `/library` | Saved albums/artists, play history | **NEW** |
 | `/queue` | Full queue page (phase 3; drawer first) | NEW (phase 3) |
+
+## Media attribution
+
+Artist portraits come from Wikimedia Commons (public-domain), pinned as 330px thumbnails in `lib/artistportraits.js` for the popular-artists set; unmapped artists resolve via the Wikipedia lead image (`lib/artistimage.js`). The home Popular artists row carries a visible "Images: Wikimedia Commons" credit; the archive.org image (temple placeholder) remains the onerror fallback.
 
 **Navigation components:**
 
