@@ -117,16 +117,16 @@ export default function NowPlayingBar() {
           )}
         </button>
 
-        {/* title/artist — tap opens the full-screen Now Playing overlay;
-            for a VIDEO podcast it expands the player island to full page
-            instead (owner: "il click sul dettaglio deve portare l'island a
-            full screen" — the overlay would only show a static cover while
-            the video keeps playing in the hidden iframe). Esc / the ✕ in
-            the island view collapse it back. */}
+        {/* title/artist — tap expands the player island to FULL SCREEN
+            (owner: EVERY track, audio included — "l'island del player che
+            non va a full screen quando si clicca il dettaglio"; the island
+            renders a controls-filling <video> that plays audio too). The
+            queue/speed/restoration overlay stays one tap away on the ⌃
+            button. Esc / the ✕ / a native-FS exit collapse it back. */}
         <button
-          onClick={() => (current.video ? setVideoView("full") : setExpanded(true))}
+          onClick={() => setVideoView("full")}
           className="min-w-0 flex-1 text-left md:max-w-xs"
-          aria-label={current.video ? "Expand video player to full page" : "Open now playing"}
+          aria-label="Expand player to full screen"
         >
           <p className="truncate text-sm font-semibold">{current.title}</p>
           <p className="truncate text-xs text-zinc-500">
@@ -144,6 +144,20 @@ export default function NowPlayingBar() {
 
         {/* Manifesto ⓘ (P0-DESIGN): the promise stated where people listen */}
         <Manifesto align="right" />
+
+        {/* Queue / speed / chapters overlay (was the detail-click target):
+            one tap, still reachable from the full-screen island too — Esc
+            there collapses the island back to the bar first. */}
+        <button
+          onClick={() => setExpanded(true)}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          aria-label="Open queue and settings"
+          title="Queue, speed, chapters, restoration"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="m6 14 6-6 6 6" />
+          </svg>
+        </button>
 
         {/* controls */}
         <div className="flex items-center gap-1.5">

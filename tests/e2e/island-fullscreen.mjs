@@ -53,7 +53,7 @@ try {
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 140)));
 
   // Seed the queue BEFORE first paint: one synthetic video-podcast track
-  // (medium podcast + video true) at index 0, position 0, paused.
+  // (medium podcast, AUDIO-ONLY — the owner's real case) at index 0, paused.
   const track = {
     id: "e2e-island/test-episode.mp4",
     title: "E2E video podcast episode",
@@ -62,7 +62,7 @@ try {
     format: "mp4",
     medium: "podcast",
     feedUrl: "https://example.invalid/feed.rss",
-    video: true,
+    video: false,
     variants: [{ format: "mp4", url: "/podcast/media/definitely-missing.mp4" }],
   };
   await page.addInitScript((seed) => {
@@ -81,7 +81,7 @@ try {
   check("island hidden at rest", /h-0 w-0/.test(atRest), atRest ?? "(null)");
 
   // Click the DETAIL area (title/artist button) in the NowPlayingBar.
-  await page.getByRole("button", { name: "Expand video player to full page" }).click();
+  await page.getByRole("button", { name: "Expand player to full screen" }).click();
   await page.waitForFunction(() => {
     const f = document.querySelector("iframe[title='Pharos player island']");
     return f && /fixed inset-0 z-50/.test(f.className);
