@@ -21,9 +21,16 @@ const page = await ctx.newPage();
 await page.addInitScript(`if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.reject(new Error("sw disabled"));`);
 
 await page.goto(`${BASE}/podcast`, { waitUntil: "domcontentloaded" });
+// The indicator lives in the app shell, so it must be present on ANY page —
+// verify on a non-podcast route too (this is where it was invisible before).
+await page.goto(`${BASE}/album?rid=x&n=Ramones`, { waitUntil: "domcontentloaded" });
+check("indicator is present on the album page too (global placement)", await page.locator("[data-p2p-level]").count() > 0);
+await page.goto(`${BASE}/podcast`, { waitUntil: "domcontentloaded" });
 
 const dot = page.locator("[data-p2p-level]");
-check("status dot is rendered on the podcast header", await dot.count() > 0);
+check("status indicator is rendered in the app shell (visible on every page)", await dot.count() > 0);
+check("indicator is text-free: exactly 3 dots", await dot.first().evaluate((el) => el.querySelectorAll("span").length === 3 && el.textContent.trim() === ""), 
+  await dot.first().evaluate((el) => `dots=${el.querySelectorAll("span").length} text="${el.textContent.trim()}"`).catch(() => ""));
 
 // The dot must become honest and consistent with the live collab snapshot.
 const t0 = Date.now();
@@ -50,7 +57,11 @@ check("dot leaves the off state once the P2P node is running", level >= 1, `data
 check("dot never overstates the live collab state (honest mirror)",
   live != null && typeof live.level === "number" && level <= Math.max(live.level, level) && live.level <= level,
   `dot=${level} live=${JSON.stringify(live)}`);
-check("dot title/aria is honest about the state",
+check("lit dots match the live level (honest progression)", await dot.first().evaluate((el) => {
+  const lit = [...el.querySelectorAll("span")].filter((s) => s.className.includes("bg-amber-400")).length;
+  return lit === Number(el.getAttribute("data-p2p-level"));
+}), `lit=${await dot.first().evaluate((el) => [...el.querySelectorAll("span")].filter((s) => s.className.includes("bg-amber-400")).length)}`);
+check("tooltip/aria is honest about the state",
   /P2P (off|network connected|peer reached|shared database live)/.test(await dot.first().getAttribute("aria-label").catch(() => "") ?? ""),
   await dot.first().getAttribute("aria-label").catch(() => ""));
 check("shared-DB state is only claimed when the collab layer agrees",
