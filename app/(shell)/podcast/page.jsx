@@ -8,6 +8,7 @@ import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/pod
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows, isVideoEnclosure, markFeedSeen, feedLastSeen } from "@/lib/subscribe";
 import { usePlayer } from "@/components/PlayerProvider";
 import Icon from "@/components/Icon";
+import P2PStatus from "@/components/P2PStatus";
 
 const fmtMin = (s) => {
   const m = Math.floor((Number(s) || 0) / 60);
@@ -89,7 +90,11 @@ function PodcastPageInner() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         {/* Podcast-platform header (restyle): compact hero, one-line promise */}
         <header className="mb-8 rounded-2xl bg-gradient-to-r from-emerald-900/60 via-zinc-900 to-zinc-950 px-6 py-8">
-          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400/90">Podcasts</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400/90">Podcasts</p>
+            {/* P2P status: is the shared network/database actually live? */}
+            <P2PStatus />
+          </div>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Your shows, in one place</h1>
           <p className="mt-2 max-w-xl text-sm text-zinc-400">
             Follow shows by RSS, get new episodes as they drop, and browse the charts. Listening time is the only metric we count — never plays.

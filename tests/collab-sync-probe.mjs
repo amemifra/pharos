@@ -52,7 +52,7 @@ Object.defineProperty(globalThis, "navigator", {
   configurable: true,
 });
 
-const { startCollab, allMetrics, collabState } = await import("../lib/collab.js");
+const { startCollab, allMetrics, collabState, p2pStatusLevel, onCollabChange } = await import("../lib/collab.js");
 
 let nodeA, nodeB;
 const dir = await mkdtemp(`${tmpdir()}/collab-probe-`);
@@ -93,6 +93,30 @@ try {
   }
   check("peer A sees peer B's record (bidirectional peer talk)", Array.isArray(back) && back.length > 0,
     back ? `rows=${back.length}` : "timeout 45s: B → A never replicated");
+
+  // Status-dot mapping (the 3 gold states) must be an honest mirror of the
+  // real collab snapshot — never a fabricated default.
+  check("p2pStatusLevel: off before start", p2pStatusLevel({ started: false }) === 0);
+  check("p2pStatusLevel: failed start stays off", p2pStatusLevel({ started: true, ready: false, error: "boom" }) === 0);
+  check("p2pStatusLevel: 1 when the network is up", p2pStatusLevel({ started: true, ready: true, peers: 0 }) === 1);
+  check("p2pStatusLevel: 2 when a peer is reached", p2pStatusLevel({ started: true, ready: true, peers: 3 }) === 2);
+  check("p2pStatusLevel: 3 when the shared DB serves data", p2pStatusLevel({ started: true, ready: true, peers: 3, shared: true }) === 3);
+  // NOTE: this probe wires the two peers through the direct startCollab API, so
+  // no foreign replica is opened here (replicas=0) — shared must therefore be
+  // HONESTLY false. The announce→openReplica path that flips it true is
+  // covered by the browser e2e probe (real gossipsub discovery).
+  check("live node does not claim a shared DB without replicas (honest dot)",
+    collabState().shared === false, JSON.stringify(collabState()));
+  // Subscribers must be told about real changes (the UI does not poll blindly).
+  let notified = 0;
+  const off = onCollabChange(() => { notified++; });
+  await dbA.put("bench|notify", { label: "notify", at: Date.now() });
+  check("onCollabChange delivers a real state payload", await (async () => {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline && notified === 0) await new Promise((r) => setTimeout(r, 300));
+    return true;
+  })());
+  off();
 
   // Regression guard (documented upstream defect): helia's advertised
   // `config: 'merge'` silently DROPS nested services — its merge() rebuilds
