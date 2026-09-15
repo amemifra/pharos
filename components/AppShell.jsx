@@ -10,6 +10,7 @@ import Icon from "@/components/Icon";
 import PharosMark from "@/components/PharosMark";
 import Manifesto from "@/components/Manifesto";
 import FeedbackDialog from "@/components/FeedbackDialog";
+import P2PStatus from "@/components/P2PStatus";
 import { bootNotifications } from "@/lib/notify";
 
 const NAV = [
@@ -146,6 +147,12 @@ export default function AppShell({ children }) {
           <Icon name="note" className="h-5 w-5" />
           Report an issue
         </button>
+
+        {/* P2P status: right under the feedback entry — quiet, text-free
+            (three dots light up as network → peers → shared DB advance). */}
+        <div className="mt-1 flex items-center justify-end px-3 py-1">
+          <P2PStatus />
+        </div>
 
         <p className="mt-auto flex items-center gap-2 px-3 text-[11px] leading-relaxed text-zinc-700">
           <span>A lighthouse for public culture · archive.org + open sources · zero servers</span>
