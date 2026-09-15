@@ -305,27 +305,47 @@ async function markPlayedAndPlay(ep, prev, playQueue, track) {
 function NewEpisodesSection({ subs, onOpen }) {
   const { playQueue } = usePlayer();
   const [items, setItems] = useState(null); // null = loading
+  const [pending, setPending] = useState(0); // shows still being checked
+  const [failed, setFailed] = useState(0); // shows unreachable (honest count)
   // Restricted guard state: restricted episodes are never queued — the play
   // control is replaced by an honest 🔒 label (never a dead button).
   const [restricted, setRestricted] = useState({});
   useEffect(() => {
     let alive = true;
-    if (!subs.length) { setItems([]); return; }
-    setItems(null);
+    if (!subs.length) { setItems([]); setPending(0); setFailed(0); return; }
+    setItems(null); setPending(Math.min(subs.length, 20)); setFailed(0);
     (async () => {
       const out = [];
-      // Bounded: newest 20 subs, concurrency 3, one feed parse each (cached).
-      for (const s of subs.slice(0, 20)) {
-        try {
-          const feed = await loadFeed(s.feedUrl);
-          const seen = feedLastSeen(s.feedUrl);
-          const fresh = feed.episodes.filter((ep) => ep.pubDateMs > seen);
-          for (const ep of fresh.slice(0, 5)) out.push({ show: feed.show ?? s, ep, feedUrl: s.feedUrl });
-        } catch { /* one dead feed must not hide the others */ }
-        if (!alive) return;
-      }
-      out.sort((a, b) => (b.ep.pubDateMs ?? 0) - (a.ep.pubDateMs ?? 0));
-      if (alive) setItems(out.slice(0, 20));
+      // DEFECT FIX (mobile): this loop was a sequential for..of (the comment
+      // claimed concurrency 3) — 20 subs × proxy-chain timeouts could hang
+      // the section for minutes on mobile networks. REAL concurrency 3 now,
+      // and each feed races a hard overall deadline: a slow feed resolves as
+      // "unreachable" instead of stalling everyone else. Partial results
+      // land as they arrive — the section is honest while it works.
+      const list = subs.slice(0, 20);
+      const FEED_DEADLINE_MS = 12_000;
+      let done = 0, dead = 0;
+      let i = 0;
+      const worker = async () => {
+        while (alive && i < list.length) {
+          const s = list[i++];
+          try {
+            const feed = await Promise.race([
+              loadFeed(s.feedUrl),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("feed deadline")), FEED_DEADLINE_MS)),
+            ]);
+            const seen = feedLastSeen(s.feedUrl);
+            const fresh = feed.episodes.filter((ep) => ep.pubDateMs > seen);
+            for (const ep of fresh.slice(0, 5)) out.push({ show: feed.show ?? s, ep, feedUrl: s.feedUrl });
+            out.sort((a, b) => (b.ep.pubDateMs ?? 0) - (a.ep.pubDateMs ?? 0));
+            if (alive) setItems(out.slice(0, 20));
+          } catch { dead++; if (alive) setFailed(dead); }
+          done++;
+          if (alive) setPending(Math.max(0, Math.min(subs.length, 20) - done));
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      if (alive) { setItems(out.slice(0, 20)); setPending(0); }
     })();
     return () => { alive = false; };
   }, [subs]);
@@ -345,8 +365,11 @@ function NewEpisodesSection({ subs, onOpen }) {
     <section className="mb-10" aria-label="New episodes">
       <h2 className="mb-4 text-xl font-bold tracking-tight">New episodes</h2>
       {items === null && <p className="text-sm text-zinc-500">Checking your shows for new episodes…</p>}
-      {items?.length === 0 && (
-        <p className="text-sm text-zinc-500">No new episodes — you are up to date.</p>
+      {items?.length === 0 && pending > 0 && (
+        <p className="text-sm text-zinc-500">Checking your shows for new episodes… {pending} left{failed > 0 ? `, ${failed} unreachable` : ""}</p>
+      )}
+      {items?.length === 0 && pending === 0 && (
+        <p className="text-sm text-zinc-500">{failed > 0 ? `No new episodes — ${failed} show${failed > 1 ? "s" : ""} could not be checked (network).` : "No new episodes — you are up to date."}</p>
       )}
       {items?.length > 0 && (
         <ul className="divide-y divide-zinc-800/60 rounded-xl bg-zinc-900/50">
