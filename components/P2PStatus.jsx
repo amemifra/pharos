@@ -73,37 +73,31 @@ export default function P2PStatus({ className = "" }) {
     return () => { alive = false; clearInterval(id); if (unsub) unsub(); };
   }, []);
 
-  const lit = level > 0;
+  // Quiet, text-free indicator: three small dots, lit in order as the P2P
+  // state machine advances (network → peers → shared DB). The tooltip/aria
+  // carry the honest wording; the surface stays unobtrusive.
   const title = `${LABELS[level]}${level >= 2 ? ` · ${peers} peer${peers === 1 ? "" : "s"}` : ""}`;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 ${className}`}
+      className={`inline-flex items-center gap-1 ${className}`}
       role="status"
       aria-label={title}
       title={title}
       data-p2p-level={level}
     >
-      <span
-        aria-hidden="true"
-        className={`h-2 w-2 shrink-0 rounded-full ${
-          level === 3
-            ? "bg-amber-400 shadow-[0_0_6px_2px_rgba(251,191,36,0.45)]"
-            : level === 2
-              ? "bg-amber-400"
-              : level === 1
-                ? "bg-amber-400/45"
-                : "bg-zinc-600"
-        }`}
-      />
-      <span className={`text-[11px] ${lit ? "text-amber-400/90" : "text-zinc-500"}`}>
-        {level === 0
-          ? "P2P off"
-          : level === 1
-            ? "P2P"
-            : level === 2
-              ? `P2P · ${peers} peer${peers === 1 ? "" : "s"}`
-              : `P2P · shared (${peers})`}
-      </span>
+      {[1, 2, 3].map((step) => (
+        <span
+          key={step}
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 rounded-full transition-colors ${
+            level >= step
+              ? step === 3
+                ? "bg-amber-400 shadow-[0_0_4px_rgba(251,191,36,0.5)]"
+                : "bg-amber-400"
+              : "bg-zinc-700"
+          }`}
+        />
+      ))}
     </span>
   );
 }
