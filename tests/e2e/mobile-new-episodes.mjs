@@ -64,14 +64,22 @@ while (Date.now() - t0 < 30_000) {
 check("section leaves the loading state (bounded, no hang)", populated, `${((Date.now() - t0) / 1000).toFixed(1)}s`);
 check("section lists the fresh episode", /Brand new episode/.test(body), body?.trim().slice(0, 120));
 
-// The catalog layer must not hang either: catalogGet bounded → answer in <10s.
-const catalogOk = await page.evaluate(() => Promise.race([
-  import("/collab.js").then(async (c) => {
-    await c.startCollab().catch(() => null);
-    return c.collabState();
-  }).catch((e) => "collab-import-fail:" + String(e).slice(0, 80)),
-  new Promise((r) => setTimeout(() => r("timeout-15s"), 15_000)),
-]));
+// The catalog layer must not hang either: catalogGet bounded → answer in <15s.
+const catalogOk = await page.evaluate(() => {
+  // BasePath-aware: on GitHub Pages the app lives under /pharos/, so the
+  // precompiled bundle is served at <basePath>/collab.js — a root-absolute
+  // "/collab.js" import 404s there. Derive the base from a Next static chunk
+  // URL (the page URL itself is nested and not a valid base).
+  const chunk = [...document.querySelectorAll("script[src]")].map((s) => s.src).find((u) => u.includes("/_next/static/"));
+  const base = chunk ? chunk.slice(0, chunk.indexOf("/_next/static/")) + "/" : new URL(".", location.href).href;
+  return Promise.race([
+    import(base + "collab.js").then(async (c) => {
+      await c.startCollab().catch(() => null);
+      return c.collabState();
+    }).catch((e) => "collab-import-fail:" + String(e).slice(0, 80)),
+    new Promise((r) => setTimeout(() => r("timeout-15s"), 15_000)),
+  ]);
+});
 check("collab import resolves in bounded time (no hang)", catalogOk !== "timeout-15s", JSON.stringify(catalogOk).slice(0, 120));
 check("collab is ready with the shared DB open (pubsub present)", catalogOk?.ready === true && catalogOk?.dbOpen === true, JSON.stringify(catalogOk).slice(0, 120));
 check("no page errors", errors.length === 0, errors.join(" | ").slice(0, 200));
