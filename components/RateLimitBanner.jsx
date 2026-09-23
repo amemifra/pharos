@@ -40,6 +40,13 @@ export default function RateLimitBanner() {
       data-mb-reason={lim.reason || ""}
       className="mb-rate-limit-banner"
       style={{
+        // Review finding (r1): the Splash overlay is `fixed inset-0 z-[100]`
+        // and previously covered this in-flow banner exactly while catalog
+        // pages load (the moment the banner exists to report). A relative
+        // stacking context above the splash keeps the truthful state visible
+        // during the splash, without changing the splash itself.
+        position: "relative",
+        zIndex: 110,
         margin: "8px 12px",
         padding: "6px 10px",
         borderRadius: 8,
