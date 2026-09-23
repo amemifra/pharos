@@ -11,6 +11,7 @@ import PharosMark from "@/components/PharosMark";
 import Manifesto from "@/components/Manifesto";
 import FeedbackDialog from "@/components/FeedbackDialog";
 import P2PStatus from "@/components/P2PStatus";
+import RateLimitBanner from "@/components/RateLimitBanner";
 import { bootNotifications } from "@/lib/notify";
 
 const NAV = [
@@ -170,7 +171,12 @@ export default function AppShell({ children }) {
       </aside>
 
       {/* Content */}
-      <div className="md:pl-60 pb-40 md:pb-28">{children}</div>
+      <div className="md:pl-60 pb-40 md:pb-28">
+        {/* Truthful upstream rate-limit state (429/Retry-After from the
+            provider) — rendered on every page, silent when not limited. */}
+        <RateLimitBanner />
+        {children}
+      </div>
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur">
