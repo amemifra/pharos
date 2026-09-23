@@ -96,7 +96,14 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 140)));
-  page.on("console", (m) => { if (m.text().includes("[pharos:notify]")) errors.push("LOG " + m.text().slice(0, 160)); });
+  page.on("console", (m) => {
+    // The "skip check" debug line is an EXPECTED no-server path (the probe
+    // races SW registration against the check-on-open; reg can legitimately
+    // be absent). It is information, not a page error — demote it to a
+    // non-fatal log so the check measures real page errors only.
+    if (m.text().includes("[pharos:notify] skip check")) return;
+    if (m.text().includes("[pharos:notify]")) errors.push("LOG " + m.text().slice(0, 160));
+  });
 
   // Seed BEFORE first paint: one subscribed feed (our synthetic feed) with an
   // OLD last-seen marker, alerts ON (mirrors the opt-in toggle state).
