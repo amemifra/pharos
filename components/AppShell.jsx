@@ -11,6 +11,7 @@ import PharosMark from "@/components/PharosMark";
 import Manifesto from "@/components/Manifesto";
 import FeedbackDialog from "@/components/FeedbackDialog";
 import P2PStatus from "@/components/P2PStatus";
+import RateLimitBanner from "@/components/RateLimitBanner";
 import { bootNotifications } from "@/lib/notify";
 
 const NAV = [
@@ -177,7 +178,12 @@ export default function AppShell({ children }) {
       </aside>
 
       {/* Content */}
-      <div className="md:pl-60 pb-40 md:pb-28">{children}</div>
+      <div className="md:pl-60 pb-40 md:pb-28">
+        {/* Truthful upstream rate-limit state (429/Retry-After from the
+            provider) — rendered on every page, silent when not limited. */}
+        <RateLimitBanner />
+        {children}
+      </div>
 
       {/* Build-update notice — appears at most once per new build version
           (lib/notify.js), flat style, honest text, never a prompt loop. */}
