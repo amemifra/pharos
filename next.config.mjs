@@ -12,6 +12,19 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 const config = {
   output: "export",
+  // Identifiable build: commit + timestamp land in out/BUILD_ID and in the
+  // client bundle identity, so the deployed artifact can be matched against
+  // out/version.json written by scripts/version-manifest.mjs (postbuild).
+  generateBuildId: async () => {
+    const { execFileSync } = await import("node:child_process");
+    let commit = null;
+    try {
+      commit = execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+    } catch {}
+    return commit ? `${commit}-${Date.now()}` : Date.now().toString();
+  },
   images: { unoptimized: true }, // plain <img> everywhere; next/image unused
   trailingSlash: true,
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),
