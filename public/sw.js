@@ -24,10 +24,18 @@
  * (tests/e2e/pwa-probe.mjs) — behavior gates never run on real network.
  */
 
-const STATIC_CACHE = "pharos-static-v1";
-const PAGES_CACHE = "pharos-pages-v1";
-const FEEDS_CACHE = "pharos-feeds-v1";
-const SYNC_CACHE = "pharos-sync-v1";
+/**
+ * Build version — replaced at build time by scripts/version-sw.mjs (out/sw.js;
+ * the git short SHA of the deployed build). Cache names are keyed on it so a
+ * new deploy opens FRESH caches instead of silently re-serving the previous
+ * build's shell from the old ones (the fixed-v1 defect), and activate purges
+ * every pharos-* cache that is not part of this build.
+ */
+const BUILD = "__PHAROS_BUILD__";
+const STATIC_CACHE = `pharos-static-${BUILD}`;
+const PAGES_CACHE = `pharos-pages-${BUILD}`;
+const FEEDS_CACHE = `pharos-feeds-${BUILD}`;
+const SYNC_CACHE = `pharos-sync-${BUILD}`;
 const SYNC_TAG = "pharos-new-episodes";
 const SYNC_KEY = "pharos:sync-state";
 /** Cap: at most this many feeds per background check (bounded work). */
@@ -152,7 +160,9 @@ if (typeof self !== "undefined" && typeof self.registration !== "undefined") {
       (async () => {
         const keep = new Set([STATIC_CACHE, PAGES_CACHE, FEEDS_CACHE, SYNC_CACHE]);
         for (const name of await caches.keys()) {
-          if (!keep.has(name)) await caches.delete(name); // versioned cleanup
+          // Real purge across build versions: drop every pharos-* cache this
+          // build does not own (old-version shells never get served again).
+          if (name.startsWith("pharos-") && !keep.has(name)) await caches.delete(name);
         }
         await self.clients.claim();
       })(),
@@ -234,6 +244,13 @@ if (typeof self !== "undefined" && typeof self.registration !== "undefined") {
       }));
     } else if (msg.type === "pharos:skip-waiting") {
       self.skipWaiting();
+    } else if (msg.type === "pharos:get-version") {
+      // Update-notice contract: the page keys its one-notice-per-version
+      // guard on THIS build id (lib/notify.js). With a transferred
+      // MessagePort event.source is null — reply on ports[0].
+      const reply = { type: "pharos:version", version: BUILD };
+      if (event.ports?.length) event.ports[0].postMessage(reply);
+      else event.source?.postMessage(reply);
     }
   });
 

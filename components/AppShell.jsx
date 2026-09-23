@@ -61,9 +61,16 @@ export default function AppShell({ children }) {
   // PWA installable: register the service worker, then — ONLY if the user
   // opted in (pf.notify) — the no-server new-episode check-on-open + the
   // worker-side periodicSync snapshot. Never prompts: see lib/notify.js.
+  // The build-update notice is non-looping: at most ONE banner per new build
+  // version (state-guarded in lib/notify.js watchForUpdates).
+  const [updateNotice, setUpdateNotice] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    import("@/lib/notify").then((m) => { if (!cancelled) m.bootNotifications(); }).catch(() => {});
+    import("@/lib/notify").then((m) => {
+      if (cancelled) return;
+      m.onUpdateNotice(() => setUpdateNotice(true));
+      m.bootNotifications();
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -171,6 +178,43 @@ export default function AppShell({ children }) {
 
       {/* Content */}
       <div className="md:pl-60 pb-40 md:pb-28">{children}</div>
+
+      {/* Build-update notice — appears at most once per new build version
+          (lib/notify.js), flat style, honest text, never a prompt loop. */}
+      {updateNotice && (
+        <div
+          role="status"
+          data-pharos-update-notice="1"
+          className="fixed bottom-16 md:bottom-6 inset-x-0 z-40 flex items-center justify-center gap-4 px-4"
+        >
+          <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2 text-xs text-zinc-300">
+            <span>Pharos has been updated to a new build.</span>
+            <button
+              type="button"
+              onClick={() => {
+                // Promote the waiting worker BEFORE the reload so the new
+                // build actually takes control and purges the old caches.
+                try {
+                  navigator.serviceWorker?.getRegistration().then((r) => {
+                    r?.waiting?.postMessage({ type: "pharos:skip-waiting" });
+                  }).catch(() => {});
+                } catch {}
+                location.reload();
+              }}
+              className="rounded-md bg-emerald-500/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-950 hover:bg-emerald-400"
+            >
+              Reload
+            </button>
+            <button
+              type="button"
+              onClick={() => setUpdateNotice(false)}
+              className="text-[11px] text-zinc-500 hover:text-zinc-300"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 flex border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur">
