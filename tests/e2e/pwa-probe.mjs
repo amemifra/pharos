@@ -96,7 +96,14 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e).slice(0, 140)));
-  page.on("console", (m) => { if (m.text().includes("[pharos:notify]")) errors.push("LOG " + m.text().slice(0, 160)); });
+  page.on("console", (m) => {
+    // The "skip check" debug line is an EXPECTED no-server path (the probe
+    // races SW registration against the check-on-open; reg can legitimately
+    // be absent). It is information, not a page error — demote it to a
+    // non-fatal log so the check measures real page errors only.
+    if (m.text().includes("[pharos:notify] skip check")) return;
+    if (m.text().includes("[pharos:notify]")) errors.push("LOG " + m.text().slice(0, 160));
+  });
 
   // Seed BEFORE first paint: one subscribed feed (our synthetic feed) with an
   // OLD last-seen marker, alerts ON (mirrors the opt-in toggle state).
@@ -120,16 +127,20 @@ try {
   await page.reload({ waitUntil: "load" });
   await page.waitForLoadState("networkidle").catch(() => {});
 
-  // Cache-first: some immutable /_next/static asset must land in the cache.
-  await page.waitForFunction(async () => {
-    if (!self.caches) return false;
-    const c = await caches.open("pharos-static-v1").catch(() => null);
+  // Cache-first: some immutable /_next/static asset must land in the STATIC
+  // cache (name is build-versioned: pharos-static-<build>).
+  const staticCacheName = await page.evaluate(async () =>
+    (await caches.keys()).find((n) => n.startsWith("pharos-static-")) ?? null);
+  await page.waitForFunction(async (name) => {
+    if (!self.caches || !name) return false;
+    const c = await caches.open(name).catch(() => null);
     return c && (await c.keys()).some((r) => r.url.includes("/_next/static/"));
-  }, { timeout: 15_000 }).catch(() => {});
-  check("cache-first: _next/static cached", await page.evaluate(async () => {
-    const c = await caches.open("pharos-static-v1").catch(() => null);
+  }, staticCacheName, { timeout: 15_000 }).catch(() => {});
+  check("cache-first: versioned pharos-static-<build> exists", !!staticCacheName, staticCacheName ?? "none");
+  check("cache-first: _next/static cached", await page.evaluate(async (name) => {
+    const c = await caches.open(name).catch(() => null);
     return c ? (await c.keys()).filter((r) => r.url.includes("/_next/static/")).length : 0;
-  }), "entries in pharos-static-v1");
+  }, staticCacheName), `entries in ${staticCacheName}`);
 
   // Check-on-open: with alerts enabled and an old last-seen marker, the boot
   // check must fire one local notification (last-seen advance is asserted
