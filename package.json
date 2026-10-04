@@ -12,12 +12,14 @@
     "e2e:fill": "node tests/e2e/fill.mjs"
   },
   "dependencies": {
+    "@libp2p/gossipsub": "^16.1.1",
     "@orbitdb/core": "^4.0.0",
     "helia": "^7.1.10",
+    "image-size": "^2.0.4",
     "next": "^15.0.0",
+    "postcss": "^8.5.28",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@libp2p/gossipsub": "^15.0.16"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
