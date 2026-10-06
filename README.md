@@ -52,6 +52,8 @@ Results are saved to localStorage for cross-device comparisons.
 
 ## P2P collaboration (opt-in)
 
+The browser bundle `public/collab.js` is a generated artifact (`npm run collab:build`, esbuild from `lib/collab.js`) and is **not committed** to the repository; build it locally or at deploy time.
+
 `lib/collab.js` starts an in-page Helia+OrbitDB node on demand. Shared benchmark
 metrics (`shareMetrics`) feed the JS vs WASM decision with real data gathered
 from every user's device — no backend involved. Sharing is explicit: the node
