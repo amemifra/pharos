@@ -1,0 +1,25 @@
+# Gitleaks allowlist — reviewed false positives (security gate r2, project 64).
+#
+# Rule: [allowlist] entries here are file+rule scoped and documented per entry.
+# A blanket allow would be a leak hiding tool, not a remediation: every entry
+# must name exactly the vendor artifact that triggers the rule and say why.
+
+[extend]
+# Use gitleaks default rules as the base.
+
+[allowlist]
+description = "PEM header string literals inside the minified collab vendor bundle"
+paths = [
+  '''(^|/)public/collab\.js$''',
+]
+rules = [
+  '''private-key''',
+]
+# Why this is NOT a leak:
+# public/collab.js is a BUILT artifact (npm run collab:build, esbuild minified
+# from lib/collab.js). The "private key" matches are the string literals
+# "-----BEGIN ENCRYPTED PRIVATE KEY-----" / "-----BEGIN PRIVATE KEY-----"
+# inside the bundled crypto library code — protocol detection strings, not key
+# material. The repo contains no PEM blocks (grep: only these literals in the
+# minified bundle). Still, defense in depth: the rule stays scoped to exactly
+# this file, so any real key committed elsewhere is still caught.
