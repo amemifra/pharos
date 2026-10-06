@@ -81,3 +81,17 @@ change. For local production preview:
 
     NEXT_PUBLIC_BASE_PATH=/public-music-flac-wrapper npm run build
     npx serve out
+
+## Security notes
+
+- `public/collab.js` is a generated esbuild bundle (`npm run collab:build` from
+  `lib/collab.js` + vendored crypto dependencies). It is intentionally not
+  committed — build it at deploy time. The bundle embeds PEM header *string
+  literals* from key-handling code in the vendored dependencies; these are
+  false positives, not key material.
+- `publishCanon` (`lib/popularity.js`) writes to OrbitDB only when the caller
+  supplies an `opts.authorize()` callback that returns true; without it the
+  call throws `unauthorized` (fail-closed, CWE-306). See
+  `tests/canon.publish.test.mjs`.
+- Weak-crypto / client-trust / CORS advisory findings reported by scanners are
+  inherited from the benchmark/R&D prototype surface and are tracked for V2.
