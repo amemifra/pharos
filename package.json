@@ -7,7 +7,7 @@
     "build": "next build && node scripts/version-sw.mjs && node scripts/version-manifest.mjs",
     "collab:build": "npx -y esbuild@0.25.0 lib/collab.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=public/collab.js",
     "start": "next start",
-    "test": "node tests/canon.publish.test.mjs && node tests/dq.test.mjs && node tests/dq.fill.mjs && node tests/dq.podcast.mjs && node tests/braces-expansion-limit.cjs",
+    "test": "node tests/canon.publish.test.mjs && node tests/dq.test.mjs && node tests/dq.fill.mjs && node tests/dq.podcast.mjs && node tests/braces-expansion-limit.cjs && node tests/forge-digest-algorithm.cjs",
     "e2e": "node tests/e2e/journeys.mjs",
     "e2e:fill": "node tests/e2e/fill.mjs"
   },
@@ -20,7 +20,8 @@
     "next": "^15.0.0",
     "postcss": "^8.5.28",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "node-forge": "file:vendor/security-backports/node-forge-1.4.0.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
@@ -32,6 +33,7 @@
     "braces": "$braces",
     "image-size": "$image-size",
     "postcss": "$postcss",
-    "fast-xml-parser": "5.7.0"
+    "fast-xml-parser": "5.7.0",
+    "node-forge": "$node-forge"
   }
 }
