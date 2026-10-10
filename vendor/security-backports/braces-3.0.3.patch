@@ -1,0 +1,86 @@
+--- a/lib/compile.js
++++ b/lib/compile.js
+@@ -2,8 +2,10 @@
+ 
+ const fill = require('fill-range');
+ const utils = require('./utils');
++const depthGuard = require('./depth-guard');
+ 
+ const compile = (ast, options = {}) => {
++  depthGuard.check(ast);
+   const walk = (node, parent = {}) => {
+     const invalidBlock = utils.isInvalidBrace(parent);
+     const invalidNode = node.invalid === true && options.escapeInvalid === true;
+--- /dev/null
++++ b/lib/depth-guard.js
+@@ -0,0 +1,13 @@
++'use strict';
++// Local security backport: fixed total AST nesting budget, not caller configurable.
++const MAX_DEPTH = 128;
++const refuse = () => { const e = new SyntaxError('Brace AST exceeds maximum depth (128)'); e.code = 'BRACES_MAX_DEPTH'; throw e; };
++const check = ast => {
++  const stack = [[ast, 0]];
++  while (stack.length) {
++    const [node, depth] = stack.pop();
++    if (depth > MAX_DEPTH) refuse();
++    if (node && Array.isArray(node.nodes)) for (const child of node.nodes) stack.push([child, depth + 1]);
++  }
++};
++module.exports = { MAX_DEPTH, refuse, check };
+--- a/lib/expand.js
++++ b/lib/expand.js
+@@ -3,6 +3,7 @@
+ const fill = require('fill-range');
+ const stringify = require('./stringify');
+ const utils = require('./utils');
++const depthGuard = require('./depth-guard');
+ 
+ const append = (queue = '', stash = '', enclose = false) => {
+   const result = [];
+@@ -31,6 +32,7 @@
+ };
+ 
+ const expand = (ast, options = {}) => {
++  depthGuard.check(ast);
+   const rangeLimit = options.rangeLimit === undefined ? 1000 : options.rangeLimit;
+ 
+   const walk = (node, parent = {}) => {
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -1,6 +1,7 @@
+ 'use strict';
+ 
+ const stringify = require('./stringify');
++const depthGuard = require('./depth-guard');
+ 
+ /**
+  * Constants
+@@ -143,6 +144,7 @@
+      */
+ 
+     if (value === CHAR_LEFT_PARENTHESES) {
++      if (stack.length >= depthGuard.MAX_DEPTH) depthGuard.refuse();
+       block = push({ type: 'paren', nodes: [] });
+       stack.push(block);
+       push({ type: 'text', value });
+@@ -195,6 +197,7 @@
+      */
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
++      if (stack.length >= depthGuard.MAX_DEPTH) depthGuard.refuse();
+       depth++;
+ 
+       const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;
+--- a/lib/stringify.js
++++ b/lib/stringify.js
+@@ -1,8 +1,10 @@
+ 'use strict';
+ 
+ const utils = require('./utils');
++const depthGuard = require('./depth-guard');
+ 
+ module.exports = (ast, options = {}) => {
++  depthGuard.check(ast);
+   const stringify = (node, parent = {}) => {
+     const invalidBlock = options.escapeInvalid && utils.isInvalidBrace(parent);
+     const invalidNode = node.invalid === true && options.escapeInvalid === true;
