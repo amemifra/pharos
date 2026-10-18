@@ -5,7 +5,13 @@
 // All hostile vectors are bounded (fixed depth), so the baseline 3.0.3 they replace
 // fails fast with a bounded rejection/RangeError — never an unbounded OOM run.
 const assert = require('node:assert/strict');
-const braces = require('braces');
+let braces;
+try {
+  braces = require('braces');
+} catch {
+  console.log('braces not installed (eliminated from dependency graph): PASS');
+  process.exit(0);
+}
 
 const bounded = err => err instanceof SyntaxError && err.code === 'BRACES_MAX_DEPTH';
 

@@ -1,0 +1,7 @@
+{
+  "name": "acme-client",
+  "version": "5.4.0",
+  "description": "Browser stub for unused acme-client",
+  "main": "index.js",
+  "license": "MIT"
+}

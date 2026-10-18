@@ -1,0 +1,7 @@
+{
+  "name": "react-native-webrtc",
+  "version": "124.0.8",
+  "description": "Browser stub for unused react-native-webrtc",
+  "main": "index.js",
+  "license": "MIT"
+}
