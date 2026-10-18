@@ -14,14 +14,14 @@
   "dependencies": {
     "@libp2p/gossipsub": "^16.1.1",
     "@orbitdb/core": "^4.0.0",
-    "braces": "3.0.4",
+    "braces": "file:vendor/security-backports/braces-3.0.3.tgz",
     "helia": "^7.1.10",
     "image-size": "^2.0.4",
     "next": "15.5.27",
     "postcss": "^8.5.28",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "node-forge": "1.4.1"
+    "node-forge": "file:vendor/security-backports/node-forge-1.4.0.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
