@@ -8,7 +8,7 @@
  * basePath/assetPrefix come from NEXT_PUBLIC_BASE_PATH so the same build
  * works at the repo root locally (empty) and under /<repo>/ on Pages.
  */
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
@@ -23,8 +23,21 @@ if (!pharosBuild) {
   try { pharosBuild = execSync("git rev-parse --short HEAD").toString().trim(); } catch {}
 }
 
+// Full immutable source identity for the public runtime telemetry bootstrap.
+let sourceCommit = process.env.NEXT_PUBLIC_PASSO_SOURCE_COMMIT || "";
+let gitCommit = "";
+try { gitCommit = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch {}
+if (sourceCommit && !/^[0-9a-f]{40}$/i.test(sourceCommit)) throw new Error("Invalid telemetry source commit");
+if (sourceCommit && gitCommit && sourceCommit !== gitCommit) throw new Error("Telemetry source commit differs from build source");
+sourceCommit ||= gitCommit;
+if (process.env.NEXT_PUBLIC_PASSO_TELEMETRY_URL) {
+  const collector = new URL(process.env.NEXT_PUBLIC_PASSO_TELEMETRY_URL);
+  if (collector.protocol !== "https:" || collector.username || collector.password || collector.search || collector.hash || !["/", "/vibe/runtime/config"].includes(collector.pathname)) throw new Error("Invalid public telemetry collector URL");
+  if (!/^[0-9a-f]{40}$/i.test(sourceCommit)) throw new Error("Telemetry requires the full build source commit");
+}
+
 const config = {
-  env: { NEXT_PUBLIC_PHAROS_BUILD: pharosBuild || "dev" },
+  env: { NEXT_PUBLIC_PHAROS_BUILD: pharosBuild || "dev", NEXT_PUBLIC_PASSO_SOURCE_COMMIT: sourceCommit },
   output: "export",
   // Identifiable build: commit + timestamp land in out/BUILD_ID and in the
   // client bundle identity, so the deployed artifact can be matched against
