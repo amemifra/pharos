@@ -19,11 +19,13 @@ const NAV = [
   { href: "/search", icon: "search", label: "Search" },
   { href: "/library", icon: "library", label: "Library" },
   { href: "/podcast", icon: "podcast", label: "Podcast" },
+  { href: "/books", icon: "book", label: "Books" },
 ];
 
 /**
- * Navigation shell — 3 tabs per the spec (YT Music pattern #1):
- * mobile: fixed bottom tabs (Home / Search / Library); desktop: sidebar.
+ * Navigation shell — tabs per the spec (YT Music pattern #1):
+ * mobile: fixed bottom tabs (Home / Search / Library / Podcast / Books);
+ * desktop: sidebar. The active tab carries aria-current="page".
  * The player lives in the root (island iframe + NowPlayingBar) and keeps
  * playing across page transitions — all internal navigation must use
  * next/link, never <a href>, or a full reload would re-mount the shell.
@@ -121,6 +123,7 @@ export default function AppShell({ children }) {
               <Link
                 key={item.label}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   active ? "bg-zinc-800/70 text-white" : "text-zinc-400 hover:text-white hover:bg-zinc-900"
                 }`}
@@ -228,6 +231,7 @@ export default function AppShell({ children }) {
           <Link
             key={item.label}
             href={item.href}
+            aria-current={isActive(item.href) ? "page" : undefined}
             className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition-colors ${
               isActive(item.href) ? "text-white" : "text-zinc-400 hover:text-white"
             }`}
