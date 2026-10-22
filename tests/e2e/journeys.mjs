@@ -228,6 +228,19 @@ try {
   console.log("FAIL — " + String(e.message ?? e).slice(0, 120));
 }
 
+// —— Book catalogue journeys (tests/e2e/books.mjs): stubbed archive.org ——
+process.stdout.write("→ Books catalogue journeys … ");
+try {
+  const { runBooksJourneys } = await import("./books.mjs");
+  const bookResults = await runBooksJourneys({ BASE, chromium });
+  results.push(...bookResults);
+  const bad = bookResults.filter((r) => !r.ok);
+  console.log(bad.length ? `FAIL — ${bad.map((r) => `${r.name}: ${r.err}`).join("; ")}` : `OK (${bookResults.length})`);
+} catch (e) {
+  results.push({ name: "Books catalogue journeys", ok: false, ms: 0, err: String(e.message ?? e).slice(0, 120) });
+  console.log("FAIL — " + String(e.message ?? e).slice(0, 120));
+}
+
 const failed = results.filter((r) => !r.ok);
 console.log(`\n═══ ${results.length - failed.length}/${results.length} journeys OK ═══`);
 for (const r of results.filter((r) => r.ok)) {
