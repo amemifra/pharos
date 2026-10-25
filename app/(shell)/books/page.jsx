@@ -139,6 +139,9 @@ export default function BooksPage() {
     <main className="mx-auto max-w-6xl px-4 md:px-8 pt-6 md:pt-10" data-testid="books-page">
       <h1 className="mb-2 text-2xl font-bold tracking-tight md:text-3xl">Books</h1>
       <p className="mb-6 text-sm text-zinc-500">Public-domain and openly licensed books from archive.org.</p>
+      <p className="-mt-4 mb-6 text-xs text-zinc-600" data-testid="books-source-note">
+        Reading opens on archive.org: Pharos keeps no copy of any book.
+      </p>
 
       <form
         role="search"
