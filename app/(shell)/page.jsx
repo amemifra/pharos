@@ -168,7 +168,7 @@ export default function HomePage() {
 
       {/* Popular artists */}
       <section id="artists" className="mb-10">
-        <h2 className="mb-4 text-xl font-bold tracking-tight">Popular artists</h2>
+        <h2 data-testid="home-discovery-heading" className="mb-4 text-xl font-bold tracking-tight">Discover artists. Rediscover culture.</h2>
         <div className="shelf-scroll flex gap-5 overflow-x-auto pb-3 -mx-4 px-4 md:-mx-8 md:px-8">
           {artists === null && Array.from({ length: 8 }, (_, i) => <SkeletonCard key={i} circle />)}
           {artists?.map(({ name }) => (
