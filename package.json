@@ -16,7 +16,7 @@
     "@orbitdb/core": "^4.0.0",
     "helia": "^7.1.10",
     "image-size": "^2.0.4",
-    "next": "15.5.27",
+    "next": "15.5.28",
     "postcss": "^8.5.28",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
