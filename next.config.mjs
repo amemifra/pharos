@@ -13,6 +13,15 @@ import { execFileSync, execSync } from "node:child_process";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 /**
+ * PHAROS_SERVER=1 builds a Node server (`npm run build:server` +
+ * `npm run start:server`) instead of the static export: only then do
+ * instrumentation.js (server errors) and the *.server.js route handlers
+ * (browser error intake, error drill) exist, and the browser reporter gets its
+ * same-origin endpoint. The default Pages build is unchanged.
+ */
+const serverMode = process.env.PHAROS_SERVER === "1";
+
+/**
  * Build version (git short SHA) inlined into the client bundle: the page
  * compares it against the service worker's reported build (lib/notify.js
  * verifyBuildVersion) to show the non-looping update notice when a new
@@ -37,8 +46,14 @@ if (process.env.NEXT_PUBLIC_PASSO_TELEMETRY_URL) {
 }
 
 const config = {
-  env: { NEXT_PUBLIC_PHAROS_BUILD: pharosBuild || "dev", NEXT_PUBLIC_PASSO_SOURCE_COMMIT: sourceCommit },
-  output: "export",
+  env: {
+    NEXT_PUBLIC_PHAROS_BUILD: pharosBuild || "dev",
+    NEXT_PUBLIC_PASSO_SOURCE_COMMIT: sourceCommit,
+    NEXT_PUBLIC_PHAROS_ERROR_ENDPOINT: serverMode ? `${basePath}/api/client-errors/` : "",
+  },
+  ...(serverMode
+    ? { pageExtensions: ["server.js", "js", "jsx"] }
+    : { output: "export", pageExtensions: ["js", "jsx"] }),
   // Identifiable build: commit + timestamp land in out/BUILD_ID and in the
   // client bundle identity, so the deployed artifact can be matched against
   // out/version.json written by scripts/version-manifest.mjs (postbuild).

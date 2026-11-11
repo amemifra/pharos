@@ -60,6 +60,39 @@ from every user's device — no backend involved. Sharing is explicit: the node
 starts only when the user requests it, and stops with `stopCollab()` to save
 battery.
 
+## Where errors are recorded
+
+Errors of the central journeys (search, album/artist, player, podcasts, books)
+are written as **one JSON line per error on the server's stdout**, prefixed by
+`"pharos":"error"` — the stream your host's log viewer shows. No third-party
+tracker, no new dependency.
+
+- **Server errors** — `instrumentation.js` (`onRequestError`) records every
+  failing route/page with name, message, truncated stack, method, path (no
+  query) and build.
+- **Browser errors** — `window.onerror`, `unhandledrejection` and the
+  `app/error.jsx` / `app/global-error.jsx` boundaries POST a bounded report
+  (`lib/errorReporter.js`) to `/api/client-errors/`, which re-validates,
+  redacts and logs it (`lib/errorlog.js`). No cookies, IPs, query strings or
+  e-mail-like strings are logged; body ≤ 8 KiB, 20 reports/min per client.
+
+Recording needs the Node server build (the default GitHub Pages export is
+static and has no server to write a log — there the reporter stays off):
+
+```bash
+npm run build:server
+npm run start:server 2>&1 | tee pharos.log   # errors appear here
+grep '"pharos":"error"' pharos.log           # only recorded errors
+```
+
+On a host, open its runtime log view (`docker logs <c>`, `journalctl -u
+pharos`, DigitalOcean App Platform → Runtime Logs) and filter on
+`"pharos":"error"`. To prove recording works, start with
+`PHAROS_ERROR_DRILL=1` and request `/api/error-drill/` (deliberate 500; 404
+without the flag) — one `"source":"server"` line appears. A browser drill is
+`curl -X POST -H 'Content-Type: application/json' -d
+'{"kind":"error","message":"drill"}' http://localhost:3000/api/client-errors/`.
+
 ## Stack
 
 Next.js (App Router) · JavaScript with JSDoc · Tailwind v4 · Helia + OrbitDB (WASM, optional)
