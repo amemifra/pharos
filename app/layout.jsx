@@ -1,5 +1,6 @@
 import "./globals.css";
 import BrowserTelemetry from "@/components/BrowserTelemetry";
+import ErrorReporter from "@/components/ErrorReporter";
 import { BASE_PATH } from "@/lib/basepath";
 
 /**
@@ -26,7 +27,7 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="bg-zinc-950 text-zinc-100 antialiased"><BrowserTelemetry />{children}</body>
+      <body className="bg-zinc-950 text-zinc-100 antialiased"><BrowserTelemetry /><ErrorReporter />{children}</body>
     </html>
   );
 }
