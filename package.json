@@ -19,7 +19,8 @@
     "next": "15.5.28",
     "postcss": "^8.5.28",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-native-webrtc": "file:vendor/stubs/react-native-webrtc"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
@@ -30,9 +31,10 @@
   "overrides": {
     "acme-client": "file:vendor/stubs/acme-client",
     "braces": "file:vendor/stubs/braces",
+    "react-native-webrtc": "$react-native-webrtc",
     "image-size": "$image-size",
     "postcss": "$postcss",
-    "fast-xml-parser": "5.7.0",
+    "fast-xml-parser": "5.12.0",
     "argparse": "2.0.1",
     "sprintf-js": "1.1.3"
   }
