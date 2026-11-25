@@ -123,5 +123,72 @@ check("detail missing publisher → null", d.publisher === null);
 check("detail formats derived from files", JSON.stringify(d.formats) === JSON.stringify(["EPUB", "PDF"]));
 check("plainText(empty) → null", plainText("<p> </p>") === null);
 
+// —— Book reader (lib/bookreader.js) ——
+const reader = await import("../lib/bookreader.js");
+const { READER_PAGE_CHARS, READER_MAX_PAGES, READER_MAX_BYTES, READABLE_SOURCE_FORMATS, BookReaderError, selectReadableFile, splitIntoPages, fetchBookText } = reader;
+
+async function rejectsReader(fn, code) {
+  try { await fn(); return false; } catch (e) { return e instanceof BookReaderError && e.code === code; }
+}
+const detail = (files) => ({ id: "moby", title: "Moby Dick", files });
+const f = (name, sourceFormat, size = null) => ({
+  format: sourceFormat === "Text" || sourceFormat === "DjVuTXT" ? "Plain text" : sourceFormat,
+  sourceFormat, name, url: `https://archive.org/download/moby/${name}`, size,
+});
+
+console.log("\n═══ Book reader ═══");
+
+// —— File selection (criterion #1: readable file → pages) ——
+check("selects the plain Text file", selectReadableFile(detail([f("a.pdf", "Text PDF"), f("a.txt", "Text")]))?.name === "a.txt");
+check("selects DjVuTXT when no Text file", selectReadableFile(detail([f("a.pdf", "Text PDF"), f("a.xml", "DjVuTXT", 500)]))?.name === "a.xml");
+check("prefers Text over DjVuTXT", selectReadableFile(detail([f("a.xml", "DjVuTXT", 9999), f("a.txt", "Text", 10)]))?.name === "a.txt");
+check("prefers largest within a source format", selectReadableFile(detail([f("s.txt", "Text", 100), f("l.txt", "Text", 5000)]))?.name === "l.txt");
+check("ignores EPUB/PDF/DjVu files", selectReadableFile(detail([f("a.epub", "EPUB"), f("a.pdf", "Text PDF"), f("a.djvu", "DjVu")])) === null);
+check("ignores private/garbage shapes", selectReadableFile(detail([null, {}])) === null);
+check("no detail → null", selectReadableFile(null) === null);
+check("readable source formats are Text + DjVuTXT only", JSON.stringify(READABLE_SOURCE_FORMATS) === JSON.stringify(["Text", "DjVuTXT"]));
+
+// —— Page splitting (criteria #1 + #2) ——
+const one = splitIntoPages("hello world");
+check("short text → one page, known count", one.pageCount === 1 && one.pages[0] === "hello world" && one.truncated === false);
+check("empty text → zero pages", splitIntoPages("   ").pageCount === 0);
+const multi = splitIntoPages(Array.from({ length: 50 }, (_, i) => `para ${i} ` + "x".repeat(600)).join("\n\n"), { pageChars: 2000 });
+check("multi-paragraph text splits into ordered pages", multi.pageCount > 1 && multi.pages.every((p) => p.length <= 2000));
+check("pages are in reading order", multi.pages[0].startsWith("para 0") && multi.pages[multi.pageCount - 1].includes("para 49"));
+const hugePara = splitIntoPages("y".repeat(5500), { pageChars: 2000 });
+check("oversized paragraph is split at the bound", hugePara.pageCount === 3 && hugePara.pages[2] === "y".repeat(1500));
+const capped = splitIntoPages(Array.from({ length: 3000 }, (_, i) => `p${i}`).join("\n\n"), { pageChars: 100, maxPages: 5 });
+check("page count is capped", capped.pageCount === 5 && capped.truncated === true);
+check("default bounds exported", READER_PAGE_CHARS > 0 && READER_MAX_PAGES > 0 && READER_MAX_BYTES > 0);
+
+// —— No readable file (criterion #3) ——
+check("no readable file → clear no_readable_file, no guess", await rejectsReader(() => fetchBookText(detail([f("a.pdf", "Text PDF")])), "no_readable_file"));
+check("no files at all → no_readable_file", await rejectsReader(() => fetchBookText(detail([])), "no_readable_file"));
+
+// —— Fetch errors (criterion #4: typed errors carrying the real cause) ——
+const plainDetail = detail([f("a.txt", "Text", 100)]);
+stub(() => { throw new TypeError("fetch failed"); });
+check("fetch rejects → network with cause", await rejectsReader(() => fetchBookText(plainDetail), "network"));
+stub(() => json({ ok: true }, 500));
+check("HTTP 500 → http", await rejectsReader(() => fetchBookText(plainDetail), "http"));
+stub(() => json({ ok: true }, 429, { "Retry-After": "30" }));
+try { await fetchBookText(plainDetail); check("429 → rate_limited", false); }
+catch (e) { check("429 → rate_limited with Retry-After", e instanceof BookReaderError && e.code === "rate_limited" && e.retryAfter === 30 && e.status === 429); }
+check("fetches the archive.org file URL", lastUrl === "https://archive.org/download/moby/a.txt");
+stub(() => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => { throw new SyntaxError("stream broken"); } }));
+check("unreadable payload → parse", await rejectsReader(() => fetchBookText(plainDetail), "parse"));
+
+// —— Oversized file guard (criterion #2) ——
+check("file over READER_MAX_BYTES refused without fetching", await rejectsReader(() => fetchBookText(detail([f("big.txt", "Text", READER_MAX_BYTES + 1)])), "parse"));
+
+// —— Happy path end to end (criterion #1) ——
+const bookText = Array.from({ length: 8 }, (_, i) => `Chapter ${i + 1}. ` + "word ".repeat(300)).join("\n\n");
+stub(() => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => bookText }));
+const read = await fetchBookText(plainDetail, { pageChars: 1200 });
+check("returns ordered pages with known page count", read.pageCount === read.pages.length && read.pageCount > 1 && read.pages.every((p) => typeof p === "string" && p.length <= 1200));
+check("page text comes from the book", read.pages[0].startsWith("Chapter 1."));
+check("truncated false for a normal book", read.truncated === false);
+check("returned file is the selected one", read.file.name === "a.txt");
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 process.exit(failed ? 1 : 0);
