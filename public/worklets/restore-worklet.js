@@ -27,12 +27,27 @@ class RestoreProcessor extends AudioWorkletProcessor {
     this.mix = 1.0;
     // Rolling noise floor (per channel), one-pole envelope follower.
     this.floor = [0, 0];
+    this.ai = null;
     this.port.onmessage = (e) => {
+      const data = e.data;
+      if (data?.type === "ai" && Number.isInteger(data.frameSize) && data.frameSize >= 128 && data.frameSize <= 4096) {
+        this.ai = { size: data.frameSize, offset: 0, id: 0, frames: new Map(), capture: null };
+      } else if (data?.type === "ai-off") {
+        this.ai = null;
+      } else if (data?.type === "result" && this.ai) {
+        const frame = this.ai.frames.get(data.id);
+        if (frame && data.channels?.length === frame.raw.length && data.channels.every(c => c instanceof Float32Array && c.length === this.ai.size && c.every(Number.isFinite))) frame.clean = data.channels;
+      }
       if (e.data?.type === "params") {
         if (Number.isFinite(e.data.threshold)) this.threshold = e.data.threshold;
         if (Number.isFinite(e.data.mix)) this.mix = Math.max(0, Math.min(1, e.data.mix));
       }
     };
+  }
+
+  fallback() {
+    this.ai = null;
+    this.port.postMessage({ type: "fallback" });
   }
 
   static get parameterDescriptors() {
@@ -63,6 +78,38 @@ class RestoreProcessor extends AudioWorkletProcessor {
         }
       }
       this.floor[ch] = floor;
+    }
+    // Fixed three-frame latency while AI is active. At most three complete
+    // frames may be outstanding. A missed deadline/overflow drops AI entirely:
+    // late replies cannot replace newer audio, and the original light DSP above
+    // keeps running throughout. No promises, waits, or inference on this thread.
+    const ai = this.ai;
+    if (ai) {
+      for (let i = 0; i < output[0].length && this.ai; i++) {
+        if (!ai.capture) ai.capture = {
+          raw: input.slice(0, 2).map(() => new Float32Array(ai.size)),
+          light: output.map(() => new Float32Array(ai.size)),
+        };
+        const due = ai.id >= 3 ? ai.frames.get(ai.id - 3) : null;
+        if (ai.id >= 3 && !due?.clean) { this.fallback(); break; }
+        for (let ch = 0; ch < ai.capture.raw.length; ch++) ai.capture.raw[ch][ai.offset] = input[ch][i];
+        for (let ch = 0; ch < output.length; ch++) {
+          ai.capture.light[ch][ai.offset] = output[ch][i];
+          output[ch][i] = due ? due.clean[Math.min(ch, due.clean.length - 1)][ai.offset] : 0;
+        }
+        if (++ai.offset === ai.size) {
+          if (due) ai.frames.delete(ai.id - 3);
+          if (ai.frames.size >= 3) { this.fallback(); break; }
+          const frame = ai.capture;
+          ai.frames.set(ai.id, frame);
+          // Copies let the bounded slots retain their fallback samples.
+          const channels = frame.raw.map(c => new Float32Array(c));
+          this.port.postMessage({ type: "frame", id: ai.id, channels }, channels.map(c => c.buffer));
+          ai.id++;
+          ai.offset = 0;
+          ai.capture = null;
+        }
+      }
     }
     return true; // keep the processor alive
   }
