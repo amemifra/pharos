@@ -130,24 +130,22 @@ export default function PlayerIslandPage() {
     let restorationCtx = null;
     let restorationSrc = null;
     let lightChain = null;
+    let stopModel = null;
+    let restorationRequest = 0;
     const bypassRestoration = () => {
+      stopModel?.(); stopModel = null;
       if (!restorationCtx || !restorationSrc) return;
       if (lightChain) { try { lightChain.hp.disconnect(); lightChain.worklet.disconnect(); } catch {} lightChain = null; }
       try { restorationSrc.disconnect(); restorationSrc.connect(restorationCtx.destination); } catch {}
       restorationCtx.suspend().catch(() => {});
     };
     const applyRestoration = async (mode) => {
+      const request = ++restorationRequest;
+      let model = null;
       try {
         if (mode === "ai") {
-          const model = await import("@/lib/restore-model.js").then((m) => m.checkModel());
-          if (!model.available) {
-            bypassRestoration();
-            window.__pharosRestoration = { mode: "ai", active: false, status: "model unavailable" };
-            return;
-          }
-          // A wired model would insert the WASM denoise node here (see
-          // lib/restore-model.js wiring notes) — full integration lands with
-          // the model file itself. Until then "ai" runs the light chain.
+          model = await import("@/lib/restore-model.js").then((m) => m.loadModel());
+          if (request !== restorationRequest) { try { await model.session?.release(); } catch {} return; }
         }
         if (mode === "off") {
           bypassRestoration();
@@ -159,6 +157,7 @@ export default function PlayerIslandPage() {
           // Worklet first: on load failure the element stays unrouted →
           // audio keeps flowing to the default destination (honest degrade).
           await restorationCtx.audioWorklet.addModule(assetPath("/worklets/restore-worklet.js"));
+          if (request !== restorationRequest) { try { await model?.session?.release(); } catch {} return; }
           restorationSrc = restorationCtx.createMediaElementSource(audio); // once, ever
         }
         restorationCtx.resume().catch(() => {});
@@ -166,12 +165,22 @@ export default function PlayerIslandPage() {
         hp.type = "highpass";
         hp.frequency.value = 80; // turntable rumble band
         const workletNode = new AudioWorkletNode(restorationCtx, "restore-worklet");
+        stopModel?.(); stopModel = null;
         if (lightChain) { try { lightChain.hp.disconnect(); lightChain.worklet.disconnect(); } catch {} }
         restorationSrc.disconnect();
         restorationSrc.connect(hp).connect(workletNode).connect(restorationCtx.destination);
         lightChain = { hp, worklet: workletNode };
-        window.__pharosRestoration = { mode, active: true };
+        if (model?.connect) {
+          stopModel = model.connect(workletNode.port, () => {
+            stopModel = null;
+            window.__pharosRestoration = { mode: "ai", active: false, status: "inference failed; light restoration active" };
+          });
+        }
+        window.__pharosRestoration = model?.connect
+          ? { mode: "ai", active: true }
+          : { mode, active: mode !== "ai", ...(mode === "ai" ? { status: model?.error ?? "model unavailable; light restoration active" } : {}) };
       } catch {
+        try { await model?.session?.release(); } catch {}
         // Restoration must never break playback: degrade to off honestly.
         bypassRestoration();
         window.__pharosRestoration = { mode, active: false, status: "graph failed" };
@@ -338,6 +347,8 @@ export default function PlayerIslandPage() {
     } catch {}
 
     return () => {
+      restorationRequest++;
+      stopModel?.();
       window.removeEventListener("message", onMessage);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("keydown", onIslandKey);
