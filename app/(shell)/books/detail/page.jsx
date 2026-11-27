@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { fetchBook } from "@/lib/books";
+import { fetchBookText, BookReaderError } from "@/lib/bookreader";
 import SurfaceState from "@/components/SurfaceState";
 
 /**
@@ -13,8 +14,8 @@ import SurfaceState from "@/components/SurfaceState";
  * Static export: the id travels in the query string (no dynamic segment, no
  * server), read client-side via useSearchParams inside a Suspense boundary.
  * Every field archive.org did not return is shown as "Unknown", never filled
- * in. Format links are plain external downloads; no reading or audio
- * behaviour lives here and the player island is untouched.
+ * in. Format links are plain external downloads; the in-app reader fetches
+ * text on demand only (never stored) and the player island is untouched.
  */
 
 const UNKNOWN = "Unknown";
@@ -58,6 +59,122 @@ function DetailSkeleton() {
         <div className="h-7 w-2/3 animate-pulse rounded bg-zinc-900" />
         <div className="h-4 w-1/3 animate-pulse rounded bg-zinc-900" />
         <div className="h-4 w-1/2 animate-pulse rounded bg-zinc-900" />
+      </div>
+    </div>
+  );
+}
+
+/** Human messages per BookReaderError code (lib/bookreader.js). */
+const READER_ERROR_TITLES = {
+  no_readable_file: "This book has no readable text file the app can open in place.",
+  network: "archive.org could not be reached.",
+  http: "archive.org returned an error.",
+  parse: "The book's text could not be read.",
+  rate_limited: "archive.org is rate limiting requests — try again shortly.",
+};
+
+function BookReader({ book }) {
+  const [readerState, setReaderState] = useState("idle"); // idle | loading | ready | error
+  const [pages, setPages] = useState([]);
+  const [pageCount, setPageCount] = useState(0);
+  const [page, setPage] = useState(0);
+  const [truncated, setTruncated] = useState(false);
+  const [error, setError] = useState(null);
+
+  const open = useCallback(async (signal) => {
+    setReaderState("loading");
+    setError(null);
+    try {
+      const result = await fetchBookText(book);
+      if (signal?.cancelled) return;
+      setPages(result.pages);
+      setPageCount(result.pageCount);
+      setTruncated(result.truncated);
+      setPage(0);
+      setReaderState("ready");
+    } catch (e) {
+      if (signal?.cancelled) return;
+      setError(e);
+      setReaderState("error");
+    }
+  }, [book]);
+
+  const openReader = () => {
+    const signal = { cancelled: false };
+    open(signal);
+  };
+
+  if (readerState === "idle") {
+    return (
+      <button
+        type="button"
+        onClick={openReader}
+        data-testid="reader-open"
+        className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-black hover:bg-emerald-400 transition-colors"
+      >
+        Read
+      </button>
+    );
+  }
+
+  if (readerState === "loading") {
+    return <p data-testid="reader-loading" className="text-sm text-zinc-500">Fetching the book's text from archive.org…</p>;
+  }
+
+  if (readerState === "error") {
+    const retryAfter = error?.retryAfter;
+    return (
+      <div data-testid="reader-error" className="rounded-xl bg-zinc-900/50 p-4">
+        <p className="text-sm text-red-400">{READER_ERROR_TITLES[error?.code] ?? "The book's text could not be read."}</p>
+        {error?.message && <p className="mt-1 text-xs text-zinc-500">{error.message}</p>}
+        {error?.code === "rate_limited" && retryAfter != null && (
+          <p className="mt-1 text-xs text-zinc-500">archive.org asks you to retry after {retryAfter} second{retryAfter === 1 ? "" : "s"}.</p>
+        )}
+        {error?.code !== "no_readable_file" && (
+          <button
+            type="button"
+            onClick={openReader}
+            className="mt-3 inline-flex items-center gap-2 rounded-full border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-emerald-600 hover:text-emerald-400 transition-colors"
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="reader" className="rounded-xl bg-zinc-900/50 p-4">
+      {truncated && (
+        <p data-testid="reader-truncated" className="mb-3 text-xs text-amber-400">
+          This book is longer than the in-app reader can show — the text here is truncated. Use the download links below for the full text.
+        </p>
+      )}
+      <p data-testid="reader-page" className="whitespace-pre-line text-sm leading-relaxed text-zinc-200">
+        {pages[page] ?? ""}
+      </p>
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          disabled={page === 0}
+          data-testid="reader-prev"
+          className="rounded-full border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-emerald-600 hover:text-emerald-400 transition-colors disabled:opacity-40 disabled:hover:border-zinc-700 disabled:hover:text-zinc-200"
+        >
+          Previous
+        </button>
+        <span data-testid="reader-counter" className="tabular-nums text-xs text-zinc-500">
+          Page {page + 1} of {pageCount}
+        </span>
+        <button
+          type="button"
+          onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+          disabled={page >= pageCount - 1}
+          data-testid="reader-next"
+          className="rounded-full border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-emerald-600 hover:text-emerald-400 transition-colors disabled:opacity-40 disabled:hover:border-zinc-700 disabled:hover:text-zinc-200"
+        >
+          Next
+        </button>
       </div>
     </div>
   );
@@ -142,6 +259,11 @@ function BookDetailInner() {
                 {book.licenseUrl && <Field label="License" value={book.licenseUrl} />}
                 {book.rights && <Field label="Rights" value={book.rights} />}
               </dl>
+
+              <section className="mt-8">
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">Read</h2>
+                <BookReader book={book} />
+              </section>
 
               <section className="mt-8">
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">Formats</h2>
