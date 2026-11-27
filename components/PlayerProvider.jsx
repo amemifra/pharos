@@ -327,6 +327,12 @@ export function PlayerProvider({ children }) {
       return v ? { ...t, url: v.url, format: v.format } : t;
     });
     const i = Math.max(0, Math.min(startIndex, q.length - 1));
+    // Play is a USER action: if the island is still booting (mode "pending"),
+    // the race-guard effect re-issues the queue once the mode resolves — it
+    // must resume PLAYING, not paused at position 0 (defect: the saved session
+    // resume {position:0, playing:false} clobbered the play intent and the
+    // now playing bar never started the queue). Record the intent here.
+    resumeRef.current = { position: Number(opts.position) || 0, playing: true };
     setQueue(q);
     setIndex(i);
     setTrackError(null); // new selection: previous load failure is stale
