@@ -109,25 +109,40 @@ function AlbumPageInner() {
   const [album, setAlbum] = useState(null);
   const [error, setError] = useState(null);
   // Map trackId → {artist, title, confidence, level} of canonical metadata.
-  const [canonical, setCanonical] = useState({});
-  const [identifying, setIdentifying] = useState(null); // trackId in progress
-
-  const identify = async (track) => {
-    setIdentifying(track.id);
-    try {
-      // L2 now runs through the shared catalog store (lib/catalogstore.js):
-      // no explicit OrbitDB handle needed here, helia stays out of the bundle.
-      const result = await canonicalFor(track, { allowFingerprint: true });
-      if (result) {
-        setCanonical((m) => ({ ...m, [track.id]: result }));
-        if (result.confidence >= 0.6) {
-          publishIdentification(track.id, result).catch(() => {});
-        }
-      }
-    } finally {
-      setIdentifying(null);
-    }
-  };
+const[canonical,setCanonical]=useState({});
+// TrackIds the cascade ran on WITHOUT a confident answer — an honest unknown:
+// we say so instead of keeping a guessed name on the page.
+const[unknown,setUnknown]=useState({});
+// TrackIds the listener has already confirmed (publishIdentification sent).
+const[confirmed,setConfirmed]=useState({});
+const[identifying,setIdentifying]=useState(null); // trackId in progress
+const identify=async(track)=>{
+setIdentifying(track.id);
+try{
+// L2 now runs through the shared catalog store (lib/catalogstore.js):
+// no explicit OrbitDB handle needed here, helia stays out of the bundle.
+// The acoustic level (L3) is skipped inside the cascade when no AcoustID
+// key is configured — the affordance still resolves via L1/L2.
+const result=await canonicalFor(track,{allowFingerprint:true});
+if(result){
+setCanonical((m)=>({...m,[track.id]:result}));
+setUnknown((u)=>({...u,[track.id]:false}));
+// Publishing is the LISTENER'S decision: a vote is appended through
+// publishIdentification only on explicit confirmation below, so that
+// two agreeing listeners form community consensus (never one guess).
+}else{
+setUnknown((u)=>({...u,[track.id]:true}));
+}
+}finally{
+setIdentifying(null);
+}
+};
+const confirm=(track)=>{
+const result=canonical[track.id];
+if(!result)return;
+setConfirmed((c)=>({...c,[track.id]:true}));
+publishIdentification(track.id,{artist:result.artist,title:result.title,confidence:result.confidence}).catch(()=>{});
+};
 
   useEffect(() => {
     let alive = true;
@@ -250,17 +265,30 @@ function AlbumPageInner() {
                     </span>
                   </span>
                   <span className={`flex-1 truncate text-sm ${isCurrent ? "font-medium text-emerald-400" : ""}`}>
-                    {canonical[track.id] ? (
-                      <>
-                        {canonical[track.id].title}
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-500/80">
-                          ✓ {canonical[track.id].artist} · {Math.round(canonical[track.id].confidence * 100)}%
-                        </span>
-                      </>
-                    ) : (
-                      track.title
-                    )}
-                    {needsVerify(track) && !canonical[track.id] && (
+                    {canonical[track.id]?( 
+<>
+{canonical[track.id].title}
+<span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-500/80">
+✓ {canonical[track.id].artist} · {Math.round(canonical[track.id].confidence*100)}%
+</span>
+<button
+onClick={(e)=>{e.stopPropagation();if(!confirmed[track.id])confirm(track);}}
+disabled={confirmed[track.id]}
+title={confirmed[track.id]?"Your confirmation has been shared — consensus grows with agreeing listeners":"Share your confirmation with the community (consensus needs two agreeing listeners)"}
+className="ml-2 inline-flex items-center rounded border border-emerald-700/50 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+data-testid="confirm-identification"
+>
+{confirmed[track.id]? "confirmed" : "confirm"}
+</button>
+</>
+):unknown[track.id]?( 
+<span className="ml-1 text-[10px] uppercase tracking-wide text-zinc-500" data-testid="unknown-identity">
+✗ identity unknown — no confident match found
+</span>
+):(
+track.title
+)}
+{needsVerify(track)&& !canonical[track.id]&& !unknown[track.id]&&(
                       <button
                         onClick={(e) => { e.stopPropagation(); identify(track); }}
                         disabled={identifying != null}
