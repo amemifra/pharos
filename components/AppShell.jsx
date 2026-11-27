@@ -240,6 +240,19 @@ export default function AppShell({ children }) {
             {item.label}
           </Link>
         ))}
+        {/* Report entry point on mobile too: the sidebar (desktop-only) is
+            hidden here, so the bottom nav carries the same control. A <button>
+            — not a Link — so opening the dialog never navigates or reloads the
+            shell (the player island iframe and any playing audio survive). */}
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          aria-haspopup="dialog"
+          className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-zinc-400 transition-colors hover:text-white"
+        >
+          <Icon name="note" className="h-5 w-5" />
+          Report
+        </button>
       </nav>
 
       <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} page={pathname} />
