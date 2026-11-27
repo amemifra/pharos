@@ -20,11 +20,12 @@ const NAV = [
   { href: "/library", icon: "library", label: "Library" },
   { href: "/podcast", icon: "podcast", label: "Podcast" },
   { href: "/books", icon: "book", label: "Books" },
+  { href: "/films", icon: "play", label: "Films" },
 ];
 
 /**
  * Navigation shell — tabs per the spec (YT Music pattern #1):
- * mobile: fixed bottom tabs (Home / Search / Library / Podcast / Books);
+ * mobile: fixed bottom tabs (Home / Search / Library / Podcast / Books / Films);
  * desktop: sidebar. The active tab carries aria-current="page".
  * The player lives in the root (island iframe + NowPlayingBar) and keeps
  * playing across page transitions — all internal navigation must use
