@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/copy-ort.mjs && next build && node scripts/version-sw.mjs && node scripts/version-manifest.mjs",
+    "model:fetch": "node scripts/fetch-model.mjs",
+    "build": "node scripts/fetch-model.mjs && node scripts/copy-ort.mjs && next build && node scripts/version-sw.mjs && node scripts/version-manifest.mjs",
     "collab:build": "npx -y esbuild@0.25.0 lib/collab.js --bundle --format=esm --platform=browser --target=es2022 --minify --outfile=public/collab.js",
     "start": "next start",
     "test": "node tests/canon.publish.test.mjs && node tests/books.test.mjs && node tests/dq.test.mjs && node tests/dq.podcast.mjs && node tests/braces-expansion-limit.cjs && node tests/forge-digest-algorithm.cjs && node --experimental-vm-modules --test tests/restore-model.test.mjs",
