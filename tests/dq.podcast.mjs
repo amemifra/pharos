@@ -131,5 +131,62 @@ if (sampled > 0) {
   }
 }
 
+// Podcast Index discovery (F6): no-key honest state + search-result mapping.
+// Stubbed fetch (no real network): the API base is https://api.podcastindex.org.
+{
+  const realFetch = globalThis.fetch;
+  const realStorage = globalThis.localStorage;
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+  };
+  try {
+    const pix = await import("../lib/podcastindex.js");
+    // No key → enabled() false and the API calls fail closed.
+    check("podcastindex: no key → enabled() false", pix.enabled() === false);
+    let failedHonest = false;
+    try { await pix.searchShows("test"); } catch (e) {
+      failedHonest = /no Podcast Index key configured/.test(String(e?.message ?? e));
+    }
+    check("podcastindex: no key → honest error, no fetch made", failedHonest);
+    check("podcastindex: no key → honest error for trending", await pix.trendingShows(5).then(() => false, (e) => /no Podcast Index key configured/.test(String(e?.message ?? e))));
+
+    // With a key: stubbed fetch returns the documented API shapes.
+    let lastCall = null;
+    globalThis.fetch = async (url, opts = {}) => {
+      lastCall = { url: String(url), headers: opts.headers ?? {} };
+      const feeds = lastCall.url.includes("/trending")
+        ? [{ url: "https://f.example/trending.xml", title: "Trend Show", image: "https://img.example/t.jpg", artwork: null, description: "<b>Trending</b> show" }]
+        : [{ url: "https://f.example/rss", title: "Result A", image: null, artwork: "https://img.example/a.jpg", description: "A very long description" }];
+      return { ok: true, status: 200, json: async () => ({ feeds }) };
+    };
+    try { localStorage.setItem("pf.pixkey", JSON.stringify({ key: "K", secret: "S" })); } catch {}
+    check("podcastindex: key set → enabled() true", pix.enabled() === true);
+    const searched = await pix.searchShows("foo");
+    check("searchShows maps feed url → feedUrl", searched[0].feedUrl === "https://f.example/rss");
+    check("searchShows maps title", searched[0].title === "Result A");
+    check("searchShows falls back to artwork when image missing", searched[0].image === "https://img.example/a.jpg");
+    check("searchShows truncates description to 300 chars", searched[0].description.length <= 300 && searched[0].description === "A very long description");
+    const trending = await pix.trendingShows(10);
+    check("trendingShows maps image directly", trending[0].image === "https://img.example/t.jpg");
+    check("trendingShows maps description as provided (sliced to 300)", trending[0].description === "<b>Trending</b> show");
+    // Auth headers are computed client-side from the key+secret+date (SHA-1);
+    // the secret is never sent as a header — only inside the Authorization hash.
+    const hdr = lastCall.headers ?? {};
+    check("podcastindex request carries X-Auth-Key", hdr["X-Auth-Key"] === "K");
+    check("podcastindex secret only in signature, never sent raw", hdr.Authorization != null && !JSON.stringify(hdr).includes("S"));
+
+    // Page-level mapping: a discovery result can be followed exactly like a
+    // feed-URL show (lib/subscribe.subscribe → pf.subs + shared catalog key).
+    const { subscribe, listSubs } = await import("../lib/subscribe.js");
+    subscribe({ feedUrl: searched[0].feedUrl, title: searched[0].title, image: searched[0].image, description: searched[0].description });
+    check("discovered show lands in pf.subs like a feed-URL show", listSubs().some((s) => s.feedUrl === "https://f.example/rss" && s.title === "Result A"));
+  } finally {
+    globalThis.fetch = realFetch;
+    globalThis.localStorage = realStorage;
+  }
+}
+
 console.log(`\n═══ RESULT: ${passed} pass, ${failed} fail ═══`);
 if (failed > 0) process.exit(1);

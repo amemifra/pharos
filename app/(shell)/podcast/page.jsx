@@ -6,8 +6,9 @@ import { loadFeed, relativeDate, bigArt, weeklyListeningHours } from "@/lib/podc
 import { toggleNotifications, notifyState } from "@/lib/notify";
 import { TOP_NATIONS, topPodcasts, resolveFeedUrl, listenStats } from "@/lib/podcastcharts";
 import { listSubs, subscribe, unsubscribe, isSubscribed, playedInfo, episodesToTracks, communityShows, isVideoEnclosure, markFeedSeen, feedLastSeen } from "@/lib/subscribe";
-import { usePlayer } from "@/components/PlayerProvider";
-import Icon from "@/components/Icon";
+import{usePlayer}from"@/components/PlayerProvider";
+import{enabled as pixEnabled,trendingShows,searchShows}from"@/lib/podcastindex";
+import Icon from"@/components/Icon";
 
 const fmtMin = (s) => {
   const m = Math.floor((Number(s) || 0) / 60);
@@ -104,7 +105,8 @@ function PodcastPageInner() {
 
         <YourShowsSection subs={subs} onOpen={open} onChange={setSubs} />
 
-        <AddFeedForm onOpen={open} />
+                <AddFeedForm onOpen={open} />
+        <DiscoverySection onOpen={open} />
         <CommunitySection onOpen={open} />
         <ChartsSection onOpen={open} />
       </main>
@@ -616,6 +618,155 @@ function AddFeedForm({ onOpen }) {
         RSS first: Apple Podcasts links are resolved via the public iTunes lookup; any web page via its declared RSS alternate link.
       </p>
     </form>
+  );
+}
+
+/**
+ * Discovery (F6): Podcast Index directory — trending shelf + term search.
+ * Optional: without a free key (localStorage pf.pixkey) the section shows an
+ * honest notice and a small key/secret form; the secret never leaves the
+ * browser and is only used to compute the request signature client-side
+ * (lib/podcastindex.js, no server). Follow reuses lib/subscribe.subscribe()
+ * so discovered shows behave exactly like shows added by feed URL.
+ */
+function DiscoverySection({ onOpen }) {
+  const [hasKey, setHasKey] = useState(false);
+  const [trending, setTrending] = useState(null);
+  const [trendErr, setTrendErr] = useState(null);
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState(null);
+  const [keyInput, setKeyInput] = useState("");
+  const [secretInput, setSecretInput] = useState("");
+  const [subs, setSubs] = useState([]);
+
+  useEffect(() => {
+    setHasKey(pixEnabled());
+    setSubs(listSubs());
+  }, []);
+
+  useEffect(() => {
+    if (!hasKey) return;
+    let alive = true;
+    setTrending(null);
+    setTrendErr(null);
+    trendingShows(10)
+      .then((s) => alive && setTrending(s))
+      .catch((e) => alive && setTrendErr(String(e?.message ?? e)));
+    return () => { alive = false; };
+  }, [hasKey]);
+
+  const runSearch = async (e) => {
+    e.preventDefault();
+    if (!term.trim() || searching) return;
+    setSearching(true);
+    setSearchErr(null);
+    try {
+      setResults(await searchShows(term.trim()));
+    } catch (e2) {
+      setSearchErr(String(e2?.message ?? e2));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const saveKey = (e) => {
+    e.preventDefault();
+    try { localStorage.setItem("pf.pixkey", JSON.stringify({ key: keyInput.trim(), secret: secretInput.trim() })); } catch {}
+    setKeyInput("");
+    setSecretInput("");
+    setHasKey(pixEnabled());
+  };
+
+  const follow = (show) => {
+    subscribe(show);
+    setSubs(listSubs());
+  };
+
+  if (!hasKey) {
+    return (
+      <section className="mb-10 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4" aria-label="Discover shows">
+        <h2 className="mb-2 text-xl font-bold tracking-tight">Discover shows</h2>
+        <p className="text-sm text-zinc-500">
+          Directory discovery (trending shows and term search) needs a free Podcast Index API key — without it you can still follow any show by RSS feed URL, browse the charts and the community catalog below.
+        </p>
+        <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={saveKey}>
+          <label className="text-xs text-zinc-500">
+            <span className="mb-1 block">API key</span>
+            <input value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-64 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600" />
+          </label>
+          <label className="text-xs text-zinc-500">
+            <span className="mb-1 block">API secret</span>
+            <input type="password" value={secretInput} onChange={(e) => setSecretInput(e.target.value)} className="w-64 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600" />
+          </label>
+          <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Save key</button>
+        </form>
+        <p className="mt-2 text-[11px] text-zinc-600">Stored only in this browser (localStorage pf.pixkey); used only to sign requests client-side — no server, ever.</p>
+      </section>
+    );
+  }
+
+  const card = (show) => {
+    const followed = subs.some((s) => s.feedUrl === show.feedUrl);
+    return (
+      <div key={show.feedUrl} className="w-36 shrink-0 rounded-xl bg-zinc-900 p-3 sm:w-40">
+        <button onClick={() => onOpen(show.feedUrl)} className="block w-full" aria-label={`Open ${show.title}`}>
+          <span className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-full bg-zinc-800">
+            {show.image ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={bigArt(show.image) ?? show.image} alt="" loading="lazy" className="h-full w-full object-cover" />
+            ) : (
+              <Icon name="podcast" className="h-8 w-8 text-zinc-600" />
+            )}
+          </span>
+          <span className="mt-2 block truncate text-sm font-medium">{show.title}</span>
+        </button>
+        {followed ? (
+          <span className="mt-1 block text-[11px] text-emerald-400">✓ in your shows</span>
+        ) : (
+          <button onClick={() => follow(show)} className="mt-1 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">
+            + Follow
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <section className="mb-10" aria-label="Discover shows">
+      <h2 className="mb-3 text-xl font-bold tracking-tight">Discover shows</h2>
+      <form className="mb-5 flex max-w-xl gap-2" onSubmit={runSearch}>
+        <input
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          placeholder="Search the Podcast Index directory…"
+          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          aria-label="Search podcasts"
+        />
+        <button disabled={searching} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </form>
+      {searchErr && <p className="mb-3 text-xs text-amber-400" role="status">Search failed ({searchErr}).</p>}
+      {results !== null && (
+        <div className="mb-8">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">Results for “{term}” ({results.length})</h3>
+          {results.length === 0 ? (
+            <p className="text-sm text-zinc-500">No shows found for this term.</p>
+          ) : (
+            <div className="shelf-scroll flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">{results.map(card)}</div>
+          )}
+        </div>
+      )}
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">Trending now</h3>
+      {trending === null && !trendErr && <p className="text-sm text-zinc-500">Loading trending shows…</p>}
+      {trendErr && <p className="text-sm text-amber-400" role="status">Trending unavailable right now ({trendErr}).</p>}
+      {trending?.length === 0 && <p className="text-sm text-zinc-500">No trending shows available right now.</p>}
+      {trending?.length > 0 && (
+        <div className="shelf-scroll flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">{trending.map(card)}</div>
+      )}
+    </section>
   );
 }
 
